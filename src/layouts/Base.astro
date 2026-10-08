@@ -1,0 +1,52 @@
+---
+import '@fontsource-variable/inter';
+import '@fontsource-variable/fraunces';
+import '@fontsource-variable/jetbrains-mono';
+import '../styles/global.css';
+import '../styles/prose.css';
+import { site } from '../config';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Widens the page for note layouts that carry a table of contents */
+  wide?: boolean;
+}
+
+const { title, description = site.tagline } = Astro.props;
+const fullTitle = title ? `${title} · ${site.title}` : site.title;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <script is:inline>
+      // Set the theme before first paint so there is no light/dark flash.
+      (function () {
+        try {
+          var t = localStorage.getItem('theme');
+          if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          document.documentElement.dataset.theme = t;
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <Header />
+    <main>
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

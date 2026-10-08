@@ -1,0 +1,194 @@
+---
+import Base from '../layouts/Base.astro';
+import Heatmap from '../components/Heatmap.astro';
+import Timeline from '../components/Timeline.astro';
+import { site } from '../config';
+import { getNotes, getSubjects, getStats, groupTimeline, fmtDuration } from '../lib/notes';
+
+const notes = await getNotes();
+const subjects = getSubjects(notes);
+const stats = getStats(notes, subjects);
+const years = groupTimeline(notes);
+---
+
+<Base>
+  <div class="wrap">
+    <section class="hero">
+      <p class="eyebrow">Learning log</p>
+      <h1>{site.title}</h1>
+      <p class="lede">{site.tagline}</p>
+
+      {
+        notes.length > 0 && (
+          <>
+            <div class="stats">
+              <div class="stat"><span class="n">{stats.notes}</span><span class="l">{stats.notes === 1 ? 'note' : 'notes'}</span></div>
+              <div class="stat"><span class="n">{stats.days.length}</span><span class="l">{stats.days.length === 1 ? 'day' : 'days'} with notes</span></div>
+              <div class="stat">
+                <span class="n" data-streak data-days={JSON.stringify(stats.days)}>{stats.streak}</span>
+                <span class="l">day streak · best {stats.longest}</span>
+              </div>
+              {stats.minutes > 0 ? (
+                <div class="stat"><span class="n">{fmtDuration(stats.minutes)}</span><span class="l">time logged</span></div>
+              ) : (
+                <div class="stat"><span class="n">{stats.subjects}</span><span class="l">{stats.subjects === 1 ? 'subject' : 'subjects'}</span></div>
+              )}
+            </div>
+            <Heatmap notes={notes} />
+          </>
+        )
+      }
+    </section>
+
+    {
+      notes.length === 0 ? (
+        <div class="empty">
+          <h3>Nothing here yet</h3>
+          <p>Add your first note to <code>src/content/entries/</code> (or tell Claude what you learned today) and it will show up here.</p>
+        </div>
+      ) : (
+        <>
+          <div class="filters">
+            <label class="search">
+              <span class="sr-only">Search notes</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m20 20-3.5-3.5" />
+              </svg>
+              <input id="q" type="search" placeholder="Search everything you've written…" autocomplete="off" spellcheck="false" />
+              <kbd aria-hidden="true">/</kbd>
+            </label>
+            {
+              subjects.length > 1 && (
+                <div class="pills" role="group" aria-label="Filter by subject">
+                  <button class="pill" type="button" data-pill="all" aria-pressed="true">All <span class="n">{notes.length}</span></button>
+                  {subjects.map((s) => (
+                    <button class="pill sc" type="button" data-pill={s.slug} aria-pressed="false" style={`--h:${s.hue}`}>
+                      <span class="dot" />
+                      {s.name}
+                      <span class="n">{s.notes.length}</span>
+                    </button>
+                  ))}
+                </div>
+              )
+            }
+            <p class="filter-status" id="filter-status" aria-live="polite"></p>
+          </div>
+
+          <Timeline years={years} />
+
+          <div class="empty" id="no-match" hidden>
+            <h3>No notes match</h3>
+            <p>Try a different word, or clear the filters.</p>
+          </div>
+        </>
+      )
+    }
+  </div>
+</Base>
+
+<script>
+  import { currentStreak } from '../lib/streak';
+
+  // --- streak: recomputed for the visitor's own "today"
+  const streakEl = document.querySelector<HTMLElement>('[data-streak]');
+  if (streakEl?.dataset.days) {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    streakEl.textContent = String(currentStreak(JSON.parse(streakEl.dataset.days), today));
+  }
+
+  // --- heatmap: start scrolled to the most recent weeks
+  const heat = document.querySelector<HTMLElement>('[data-heat-scroll]');
+  if (heat) heat.scrollLeft = heat.scrollWidth;
+
+  // --- search + subject filter
+  const input = document.querySelector<HTMLInputElement>('#q');
+  if (input) {
+    const entries = [...document.querySelectorAll<HTMLElement>('[data-entry]')];
+    const groups = ['[data-day]', '[data-month]', '[data-year]'].map((sel) => ({
+      els: [...document.querySelectorAll<HTMLElement>(sel)],
+      child: sel === '[data-day]' ? '[data-entry]' : sel === '[data-month]' ? '[data-day]' : '[data-month]',
+    }));
+    const pills = [...document.querySelectorAll<HTMLButtonElement>('[data-pill]')];
+    const status = document.querySelector<HTMLElement>('#filter-status')!;
+    const noMatch = document.querySelector<HTMLElement>('#no-match')!;
+
+    let subject = 'all';
+    let bodies: Map<string, string> | null = null;
+
+    const apply = () => {
+      const terms = input.value.toLowerCase().split(/\s+/).filter(Boolean);
+      let shown = 0;
+      for (const el of entries) {
+        const text = `${el.dataset.search} ${bodies?.get(el.dataset.id!) ?? ''}`;
+        el.hidden = !((subject === 'all' || el.dataset.subject === subject) && terms.every((t) => text.includes(t)));
+        if (!el.hidden) shown++;
+      }
+      for (const { els, child } of groups) for (const el of els) el.hidden = !el.querySelector(`${child}:not([hidden])`);
+
+      const filtering = terms.length > 0 || subject !== 'all';
+      status.textContent = filtering ? `Showing ${shown} of ${entries.length} notes` : '';
+      noMatch.hidden = shown > 0;
+      pills.forEach((p) => p.setAttribute('aria-pressed', String(p.dataset.pill === subject)));
+
+      const url = new URL(location.href);
+      input.value.trim() ? url.searchParams.set('q', input.value.trim()) : url.searchParams.delete('q');
+      subject !== 'all' ? url.searchParams.set('subject', subject) : url.searchParams.delete('subject');
+      history.replaceState(null, '', url);
+    };
+
+    // Note bodies are fetched the first time someone searches, so the page itself stays light.
+    const loadBodies = async () => {
+      if (bodies) return;
+      bodies = new Map();
+      try {
+        const rows: { id: string; t: string }[] = await (await fetch('/search-index.json')).json();
+        bodies = new Map(rows.map((r) => [r.id, r.t]));
+        apply();
+      } catch {}
+    };
+
+    input.addEventListener('input', () => {
+      loadBodies();
+      apply();
+    });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        input.value = '';
+        apply();
+      }
+    });
+    pills.forEach((p) =>
+      p.addEventListener('click', () => {
+        subject = p.dataset.pill!;
+        apply();
+      }),
+    );
+    document.addEventListener('keydown', (e) => {
+      const typing = /^(input|textarea|select)$/i.test((e.target as HTMLElement).tagName);
+      if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        input.focus();
+      }
+    });
+    // Jumping to a day from the heatmap while it is filtered out clears the filters.
+    window.addEventListener('hashchange', () => {
+      const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (target?.hidden) {
+        input.value = '';
+        subject = 'all';
+        apply();
+        target.scrollIntoView();
+      }
+    });
+
+    const params = new URLSearchParams(location.search);
+    input.value = params.get('q') ?? '';
+    const wanted = params.get('subject');
+    if (wanted && pills.some((p) => p.dataset.pill === wanted)) subject = wanted;
+    if (input.value) loadBodies();
+    if (input.value || subject !== 'all') apply();
+  }
+</script>

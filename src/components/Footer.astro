@@ -1,0 +1,17 @@
+---
+import { getNotes, fmtMedium } from '../lib/notes';
+import { site } from '../config';
+
+const notes = await getNotes();
+const latest = notes[0];
+---
+
+<footer class="site-footer">
+  <div class="wrap">
+    <span>{site.title}</span>
+    <span>
+      {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+      {latest && <> · last entry {fmtMedium(latest.data.date)}</>}
+    </span>
+  </div>
+</footer>

@@ -1,0 +1,30 @@
+---
+import Base from '../../layouts/Base.astro';
+import Timeline from '../../components/Timeline.astro';
+import { getNotes, getSubjects, groupTimeline, fmtMonthYear, fmtMedium, fmtDuration } from '../../lib/notes';
+
+export async function getStaticPaths() {
+  const subjects = getSubjects(await getNotes());
+  return subjects.map((subject) => ({ params: { subject: subject.slug }, props: { subject } }));
+}
+
+const { subject } = Astro.props;
+const years = groupTimeline(subject.notes);
+---
+
+<Base title={subject.name} description={`Notes on ${subject.name}`}>
+  <div class="wrap">
+    <header class="page-head">
+      <a class="back" href="/subjects">← All subjects</a>
+      <div class="subject-head sc" style={`--h:${subject.hue}`}>
+        <h1 class="page-title">{subject.name}</h1>
+        <p class="lede">
+          {subject.notes.length} {subject.notes.length === 1 ? 'note' : 'notes'}
+          {subject.minutes > 0 && <> · {fmtDuration(subject.minutes)} logged</>}
+          · since {fmtMonthYear(subject.first)}, last on {fmtMedium(subject.last)}
+        </p>
+      </div>
+    </header>
+    <Timeline years={years} />
+  </div>
+</Base>

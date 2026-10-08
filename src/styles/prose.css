@@ -1,0 +1,200 @@
+/* Typography for rendered Markdown notes */
+.prose {
+  font-size: 1.0625rem;
+  line-height: 1.75;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+
+.prose > * + * {
+  margin-top: 1.15em;
+}
+
+.prose > :first-child {
+  margin-top: 0;
+}
+
+.prose h2,
+.prose h3,
+.prose h4 {
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.prose h2 {
+  margin-top: 2.5em;
+  font-family: var(--font-serif);
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.prose h3 {
+  margin-top: 2em;
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+.prose h4 {
+  margin-top: 1.8em;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.prose a {
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.prose a:hover {
+  text-decoration-thickness: 2px;
+}
+
+.prose strong {
+  font-weight: 650;
+}
+
+.prose ul,
+.prose ol {
+  padding-left: 1.4em;
+}
+
+.prose li + li {
+  margin-top: 0.35em;
+}
+
+.prose li::marker {
+  color: var(--ink-3);
+}
+
+.prose li > ul,
+.prose li > ol {
+  margin-top: 0.35em;
+}
+
+.prose blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  padding: 0.3em 0 0.3em 1.15em;
+  border-left: 3px solid var(--accent);
+  color: var(--ink-2);
+}
+
+.prose blockquote > * + * {
+  margin-top: 0.6em;
+}
+
+.prose hr {
+  margin: 2.5em 0;
+  border: 0;
+  border-top: 1px solid var(--line-2);
+}
+
+.prose code {
+  padding: 0.15em 0.4em;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: var(--surface-2);
+  border-radius: 6px;
+}
+
+.prose pre {
+  margin-left: 0;
+  padding: 1rem 1.2rem;
+  overflow-x: auto;
+  font-size: 0.86rem;
+  line-height: 1.65;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  tab-size: 2;
+}
+
+.prose pre code {
+  padding: 0;
+  font-size: inherit;
+  background: none;
+  border-radius: 0;
+}
+
+/* Shiki dual theme: pick the colour set that matches the site theme */
+.astro-code {
+  color: var(--shiki-light);
+  background-color: var(--shiki-light-bg);
+}
+.astro-code span {
+  color: var(--shiki-light);
+}
+:root[data-theme='dark'] .astro-code {
+  color: var(--shiki-dark);
+  background-color: var(--shiki-dark-bg);
+}
+:root[data-theme='dark'] .astro-code span {
+  color: var(--shiki-dark);
+}
+
+.prose img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.prose table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.prose th,
+.prose td {
+  padding: 0.55rem 0.9rem;
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+}
+
+.prose th {
+  font-weight: 650;
+  background: var(--surface-2);
+  border-bottom-color: var(--line-2);
+}
+
+.prose input[type='checkbox'] {
+  margin: 0 0.5em 0 -1.4em;
+  accent-color: var(--accent);
+}
+
+.prose li:has(> input[type='checkbox']) {
+  list-style: none;
+}
+
+.prose kbd {
+  padding: 0.1em 0.45em;
+  font: 500 0.85em var(--font-mono);
+  border: 1px solid var(--line-2);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+}
+
+.prose mark {
+  padding: 0 0.2em;
+  background: color-mix(in oklab, var(--accent) 25%, transparent);
+  color: inherit;
+  border-radius: 3px;
+}
+
+/* Maths (KaTeX): wide equations scroll sideways instead of breaking the page */
+.prose .katex-display {
+  margin: 1.4em 0;
+  padding: 0.2em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.prose .katex {
+  font-size: 1.08em;
+}

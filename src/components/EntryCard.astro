@@ -1,0 +1,47 @@
+---
+import {
+  type Note,
+  KIND_LABEL,
+  slugify,
+  subjectHue,
+  fmtTime,
+  fmtDuration,
+  fmtMedium,
+  readingTime,
+  summaryOf,
+} from '../lib/notes';
+import KindIcon from './KindIcon.astro';
+
+interface Props {
+  note: Note;
+  /** Show the calendar date in the card (for lists that aren't grouped by day) */
+  showDate?: boolean;
+}
+
+const { note, showDate = false } = Astro.props;
+const d = note.data;
+const subjectSlug = slugify(d.subject);
+// Lower-cased text the timeline search matches against (body text is loaded on demand)
+const haystack = [d.title, d.subject, d.kind, d.summary ?? '', ...d.tags].join(' ').toLowerCase();
+---
+
+<article class="entry sc" style={`--h:${subjectHue(d.subject)}`} data-entry data-id={note.id} data-subject={subjectSlug} data-search={haystack}>
+  <div class="entry-meta">
+    {d.time && <span class="time">{fmtTime(d.time)}</span>}
+    {showDate && <span class="date">{fmtMedium(d.date)}</span>}
+    <a class="chip" href={`/subjects/${subjectSlug}`}>{d.subject}</a>
+    <span class="kind"><KindIcon kind={d.kind} />{KIND_LABEL[d.kind]}</span>
+    {d.draft && <span class="kind">Draft</span>}
+  </div>
+  <h4><a href={`/notes/${note.id}`}>{d.title}</a></h4>
+  <p class="summary">{summaryOf(note)}</p>
+  <div class="entry-foot">
+    <ul class="tags">
+      {d.tags.map((t) => <li><a href={`/?q=${encodeURIComponent(t)}`}>#{t}</a></li>)}
+    </ul>
+    <span class="facts">
+      {d.duration && <span>{fmtDuration(d.duration)}</span>}
+      <span>{readingTime(note)} min read</span>
+    </span>
+  </div>
+</article>

@@ -1,0 +1,51 @@
+---
+import { type YearGroup, fmtDayNum, fmtWeekday, fmtMonth, fmtDuration } from '../lib/notes';
+import EntryCard from './EntryCard.astro';
+
+interface Props {
+  years: YearGroup[];
+}
+
+const { years } = Astro.props;
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+---
+
+<div class="tl" data-timeline>
+  {
+    years.map((y) => (
+      <section class="year-group" data-year>
+        <div class="tl-row year">
+          <h2>{y.year}</h2>
+        </div>
+        {y.months.map((m) => (
+          <section class="month-group" data-month>
+            <div class="tl-row month">
+              <h3>
+                {fmtMonth(m.date)}
+                <small>{plural(m.count, 'note')} · {plural(m.days.length, 'day')}</small>
+              </h3>
+            </div>
+            {m.days.map((d) => (
+              <article class="tl-row day" id={`day-${d.key}`} data-day>
+                <div class="day-date">
+                  <span class="num">{fmtDayNum(d.date)}</span>
+                  <span class="wd">{fmtWeekday(d.date)}</span>
+                </div>
+                <div class="day-rail" aria-hidden="true" />
+                <div class="day-body">
+                  {(d.notes.length > 1 || d.minutes > 0) && (
+                    <p class="day-meta">
+                      {plural(d.notes.length, 'note')}
+                      {d.minutes > 0 && <> · {fmtDuration(d.minutes)}</>}
+                    </p>
+                  )}
+                  {d.notes.map((n) => <EntryCard note={n} />)}
+                </div>
+              </article>
+            ))}
+          </section>
+        ))}
+      </section>
+    ))
+  }
+</div>

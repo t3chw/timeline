@@ -1,0 +1,41 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getNotes, getSubjects, fmtMonthYear, fmtMedium, fmtDuration } from '../../lib/notes';
+
+const notes = await getNotes();
+const subjects = getSubjects(notes);
+---
+
+<Base title="Subjects" description="Everything I'm learning, grouped by subject.">
+  <div class="wrap">
+    <header class="page-head">
+      <p class="eyebrow">Browse</p>
+      <h1 class="page-title">Subjects</h1>
+      <p class="lede">Everything I'm learning and building, grouped by topic.</p>
+    </header>
+
+    {
+      subjects.length === 0 ? (
+        <div class="empty">
+          <h3>No subjects yet</h3>
+          <p>Subjects appear automatically once you add notes.</p>
+        </div>
+      ) : (
+        <div class="subject-grid">
+          {subjects.map((s) => (
+            <a class="subject-card sc" style={`--h:${s.hue}`} href={`/subjects/${s.slug}`}>
+              <h2>{s.name}</h2>
+              <span class="count">
+                {s.notes.length} {s.notes.length === 1 ? 'note' : 'notes'}
+                {s.minutes > 0 && <> · {fmtDuration(s.minutes)}</>}
+              </span>
+              <span class="span">
+                Since {fmtMonthYear(s.first)} · last on {fmtMedium(s.last)}
+              </span>
+            </a>
+          ))}
+        </div>
+      )
+    }
+  </div>
+</Base>

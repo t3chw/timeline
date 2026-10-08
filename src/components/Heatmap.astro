@@ -1,0 +1,50 @@
+---
+import { type Note, buildHeatmap, fmtMedium } from '../lib/notes';
+
+interface Props {
+  notes: Note[];
+}
+
+const { notes } = Astro.props;
+const { columns, labels, total } = buildHeatmap(notes);
+const level = (n: number) => Math.min(n, 4);
+const label = (key: string, count: number) =>
+  `${count === 0 ? 'No notes' : count === 1 ? '1 note' : `${count} notes`} · ${fmtMedium(new Date(key))}`;
+---
+
+<section class="heat" aria-label="Activity over the last year">
+  <div class="heat-head">
+    <span><strong>{total}</strong> {total === 1 ? 'note' : 'notes'} in the last year</span>
+    <span>Click a day to jump to it</span>
+  </div>
+  <div class="heat-scroll" data-heat-scroll>
+    <div class="heat-body" style={`--cols:${columns.length}`}>
+      <div class="heat-months" aria-hidden="true">
+        {labels.map((l) => <span style={`grid-column:${l.col + 1};grid-row:1`}>{l.text}</span>)}
+      </div>
+      <div class="heat-days" aria-hidden="true">
+        <span style="grid-row:1">Mon</span>
+        <span style="grid-row:3">Wed</span>
+        <span style="grid-row:5">Fri</span>
+      </div>
+      <div class="heat-grid">
+        {
+          columns.flat().map((c) =>
+            c.beyond ? (
+              <span class="cell beyond" />
+            ) : c.count > 0 ? (
+              <a class="cell" data-l={level(c.count)} href={`#day-${c.key}`} title={label(c.key, c.count)} aria-label={label(c.key, c.count)} />
+            ) : (
+              <span class="cell" data-l="0" title={label(c.key, 0)} />
+            ),
+          )
+        }
+      </div>
+    </div>
+  </div>
+  <div class="heat-legend" aria-hidden="true">
+    Less
+    {[0, 1, 2, 3, 4].map((l) => <span class="cell" data-l={l} />)}
+    More
+  </div>
+</section>

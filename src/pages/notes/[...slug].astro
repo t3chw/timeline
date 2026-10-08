@@ -1,0 +1,99 @@
+---
+import 'katex/dist/katex.min.css';
+import { render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import KindIcon from '../../components/KindIcon.astro';
+import {
+  getNotes,
+  KIND_LABEL,
+  slugify,
+  subjectHue,
+  fmtLong,
+  fmtTime,
+  fmtDuration,
+  readingTime,
+} from '../../lib/notes';
+
+export async function getStaticPaths() {
+  const notes = await getNotes();
+  // notes are newest first: the previous index is the next-newer note
+  return notes.map((note, i) => ({
+    params: { slug: note.id },
+    props: { note, newer: notes[i - 1], older: notes[i + 1] },
+  }));
+}
+
+const { note, newer, older } = Astro.props;
+const { Content, headings } = await render(note);
+const d = note.data;
+const subjectSlug = slugify(d.subject);
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3);
+const hasToc = toc.length >= 3;
+---
+
+<Base title={d.title} description={d.summary ?? `${d.subject} · ${fmtLong(d.date)}`}>
+  <div class:list={['note-wrap', { 'has-toc': hasToc }]}>
+    <header class="note-head">
+      <a class="back" href={`/#day-${d.date.toISOString().slice(0, 10)}`}>← Timeline</a>
+      <div>
+        <a class="chip sc" style={`--h:${subjectHue(d.subject)}`} href={`/subjects/${subjectSlug}`}>{d.subject}</a>
+      </div>
+      <h1>{d.title}</h1>
+      {d.summary && <p class="lead">{d.summary}</p>}
+      <div class="meta" style="margin-top:1.1rem">
+        <span>{fmtLong(d.date)}{d.time && <> · {fmtTime(d.time)}</>}</span>
+        <span class="kind"><KindIcon kind={d.kind} />{KIND_LABEL[d.kind]}</span>
+        {d.duration && <span>{fmtDuration(d.duration)}</span>}
+        <span>{readingTime(note)} min read</span>
+        {d.draft && <span>Draft</span>}
+      </div>
+    </header>
+
+    <div class:list={['note-layout', { 'has-toc': hasToc }]}>
+      <article>
+        <div class="prose">
+          <Content />
+        </div>
+
+        {
+          d.links.length > 0 && (
+            <section class="resources">
+              <h2>Resources</h2>
+              <ul>
+                {d.links.map((l) => (
+                  <li><a href={l.url} target="_blank" rel="noopener noreferrer">{l.title}</a></li>
+                ))}
+              </ul>
+            </section>
+          )
+        }
+
+        {
+          d.tags.length > 0 && (
+            <ul class="tags" style="margin-top:1.75rem;font-size:.9rem">
+              {d.tags.map((t) => <li><a href={`/?q=${encodeURIComponent(t)}`}>#{t}</a></li>)}
+            </ul>
+          )
+        }
+
+        <nav class="pager" aria-label="More notes">
+          {older && <a class="prev" href={`/notes/${older.id}`}><small>← Earlier</small><span>{older.data.title}</span></a>}
+          {newer && <a class="next" href={`/notes/${newer.id}`}><small>Later →</small><span>{newer.data.title}</span></a>}
+        </nav>
+      </article>
+
+      {
+        hasToc && (
+          <aside class="toc" aria-label="On this page">
+            <h2>On this page</h2>
+            <ol>
+              {toc.map((h) => (
+                <li class={h.depth === 3 ? 'sub' : undefined}><a href={`#${h.slug}`}>{h.text}</a></li>
+              ))}
+            </ol>
+          </aside>
+        )
+      }
+    </div>
+  </div>
+</Base>
