@@ -198,3 +198,8 @@
 .prose .katex {
   font-size: 1.08em;
 }
+
+/* Plain-text diagrams (```text): tight line height so box-drawing lines join up */
+.prose pre[data-language='text'] {
+  line-height: 1.25;
+}

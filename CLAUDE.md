@@ -21,7 +21,8 @@ The user adds material, then tells you to "update" (or "log this", "add this to 
    and `inbox/README.md`.
 3. **Reuse subject names.** List existing ones first so notes group together instead of splitting
    ("Python" vs "python3"):
-   `grep -h '^subject:' src/content/entries/*.md | sort | uniq -c | sort -rn`
+   `grep -h -m1 '^subject:' src/content/entries/*.md | sort | uniq -c | sort -rn`
+   (`-m1` takes only the front-matter line, not examples inside code blocks)
 4. **Write the notes.** One file per distinct topic, even within a single day. Several things learned
    in one sitting become several notes, each with its own `time` or the same one. Do not merge unrelated
    topics into one note. File name: `src/content/entries/YYYY-MM-DD-short-slug.md`
