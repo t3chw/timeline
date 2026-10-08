@@ -7,7 +7,8 @@ This repo is the user's running record of **everything they study and build**. I
 - `/` a day-by-day **timeline** (year > month > day) with a stats strip, a one-year activity heatmap,
   and search / subject filters
 - `/subjects` and `/subjects/<subject>` notes grouped by subject
-- `/notes/<file-name>` the full note
+- `/notes/<file-name>` the full note, with reading aids (below)
+- `/revise` notes due for spaced revision, plus a due-count badge in the header and a banner on `/`
 
 The user adds material, then tells you to "update" (or "log this", "add this to my notes", ...).
 **Doing that update is your main job in this repo.**
@@ -37,6 +38,15 @@ The user adds material, then tells you to "update" (or "log this", "add this to 
 
 ## Writing good notes
 
+- **The user has ADHD and cannot read a lot in one go. Write notes in small pieces.** One idea per
+  `##` section (the site draws a dashed "concept done" line between sections and has a focus mode that
+  shows one section at a time, so section boundaries matter). Aim for sections of roughly 120 words or
+  fewer: a one-line statement first, then short bullets or a small example. Short paragraphs, **bold**
+  the key terms, no walls of text. If a pasted source is long, split it into more `##` sections rather
+  than long ones. Use `###` only for a sub-step inside a concept.
+- **End every study note with a `## Test yourself` section** of 3 to 6 recall questions, answered from
+  the note's own content (see the template below). Re-reading is weak revision; recalling is strong.
+  Skip it only for notes that are not study material (e.g. a project log).
 - Keep the user's own ideas and voice. You may organise them, add headings, fix wording, and add a short
   worked example or explanation where it makes the note more useful, but **never invent things the user
   did** (projects, hours, results). If something they said is technically wrong, correct it in the note
@@ -51,6 +61,42 @@ The user adds material, then tells you to "update" (or "log this", "add this to 
 - Add `duration` (minutes) only if the user gave a time or it is clear; never guess.
 - Keep `tags` short, lower-case, and few (2 to 5).
 - Never rewrite or delete existing notes unless asked. Typo fixes are fine.
+
+### "Test yourself" template
+
+Click-to-reveal questions. Keep the `<summary>` line plain text (unicode like λ, Σ, ∩, ² is fine; no
+`$...$` maths there, since it is raw HTML), and leave a blank line before the answer, which is normal
+Markdown and may use maths:
+
+```md
+## Test yourself
+
+Try to answer out loud before opening each one.
+
+<details>
+<summary>Why can't mutually exclusive events with positive probability be independent?</summary>
+
+$P(A\cap B)=0$, but independence would need $P(A)P(B)>0$. Contradiction.
+
+</details>
+```
+
+## Reading aids and revision (already built, do not break)
+
+- **Bionic reading** is on by default with a toggle on every note. At build time
+  `src/lib/rehype-reading.mjs` wraps the start of each word in `<b class="bn">`; CSS
+  (`html[data-bionic]`) decides whether it looks bold. Code, maths, headings and bold text are skipped.
+- **Concept sections:** the same file wraps each `##` in `<section class="chunk">`. CSS draws the dashed
+  line with a "concept done" label between them. **Focus mode** (toggle on every note) shows one section at
+  a time with Back/Next, arrow keys, and a "Finish" that jumps to the revision card.
+- **Spaced revision** (`src/lib/revision.ts`): a note is due the day after it is written, then after 3, 7,
+  14, 30, 60 and 120 days. "I revised this" advances it, "Need to revisit" resets it to tomorrow. The
+  state is in the reader's `localStorage` (key `reviews`), so it is per browser and does not sync between
+  devices. `/revise` lists what is due; the header badge and home banner show the count. Every page embeds
+  a small `#notes-data` JSON (id, title, subject, hue, date) that these features read.
+- Preferences saved in `localStorage`: `theme`, `bionic`, `focus`, `reviews`.
+- Because notes are wrapped and bionic-ised at build time, plugin order in `astro.config.mjs` matters:
+  KaTeX first, then chunks, then bionic.
 
 ## Front matter reference
 
@@ -81,7 +127,9 @@ src/content/entries/   the notes (Markdown), the only thing that changes day to 
 src/content.config.ts  front-matter schema (add fields here)
 src/config.ts          site title/tagline, optional pinned subject colours
 src/lib/notes.ts       grouping, stats, heatmap, formatting helpers
-src/pages/             index (timeline), subjects/, notes/, search-index.json
+src/lib/revision.ts    spaced-revision schedule + localStorage (browser only)
+src/lib/rehype-reading.mjs  build-time plugins: concept sections + bionic reading
+src/pages/             index (timeline), subjects/, notes/, revise, search-index.json
 src/components/        Timeline, EntryCard, Heatmap, Header, ...
 src/styles/            global.css (layout + timeline), prose.css (note typography)
 inbox/                 drop zone for raw material (see inbox/README.md)

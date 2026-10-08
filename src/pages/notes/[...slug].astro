@@ -3,6 +3,8 @@ import 'katex/dist/katex.min.css';
 import { render } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import KindIcon from '../../components/KindIcon.astro';
+import ReadingTools from '../../components/ReadingTools.astro';
+import ReviseCard from '../../components/ReviseCard.astro';
 import {
   getNotes,
   KIND_LABEL,
@@ -12,6 +14,7 @@ import {
   fmtTime,
   fmtDuration,
   readingTime,
+  dayKey,
 } from '../../lib/notes';
 
 export async function getStaticPaths() {
@@ -47,6 +50,7 @@ const hasToc = toc.length >= 3;
         <span>{readingTime(note)} min read</span>
         {d.draft && <span>Draft</span>}
       </div>
+      <ReadingTools />
     </header>
 
     <div class:list={['note-layout', { 'has-toc': hasToc }]}>
@@ -54,6 +58,15 @@ const hasToc = toc.length >= 3;
         <div class="prose">
           <Content />
         </div>
+
+        <nav class="focus-nav" data-focus-nav aria-label="Concept navigation">
+          <div class="focus-progress" aria-hidden="true"><span data-focus-bar></span></div>
+          <div class="focus-row">
+            <button class="btn" type="button" data-focus-prev>← Back</button>
+            <span class="focus-label" data-focus-label></span>
+            <button class="btn primary" type="button" data-focus-next>Next →</button>
+          </div>
+        </nav>
 
         {
           d.links.length > 0 && (
@@ -75,6 +88,8 @@ const hasToc = toc.length >= 3;
             </ul>
           )
         }
+
+        <ReviseCard id={note.id} learned={dayKey(d.date)} />
 
         <nav class="pager" aria-label="More notes">
           {older && <a class="prev" href={`/notes/${older.id}`}><small>← Earlier</small><span>{older.data.title}</span></a>}

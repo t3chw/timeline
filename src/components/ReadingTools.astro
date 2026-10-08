@@ -1,0 +1,125 @@
+---
+// Reading aids for a note: bionic reading toggle, focus mode (one concept at a time), and the
+// previous/next navigator that focus mode uses. The bionic bold itself is baked into the page at
+// build time (see src/lib/rehype-reading.mjs); the toggle only flips html[data-bionic].
+---
+
+<div class="reading-tools" role="group" aria-label="Reading aids">
+  <button class="tool" type="button" data-tool="bionic" aria-pressed="true" title="Bold the start of each word to guide your eyes">
+    <span class="tool-ic" aria-hidden="true"><b>Ab</b>c</span>
+    Bionic reading
+    <span class="tool-state" data-state>On</span>
+  </button>
+  <button class="tool" type="button" data-tool="focus" aria-pressed="false" title="Show one concept at a time (use the arrow keys)">
+    <svg class="tool-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" />
+    </svg>
+    Focus mode
+    <span class="tool-state" data-state>Off</span>
+  </button>
+  <span class="due-pill" data-due-pill hidden>Due for revision</span>
+</div>
+
+<script>
+  const root = document.documentElement;
+  const save = (key: string, value: string) => {
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  };
+
+  // ---- bionic reading
+  const bionicBtn = document.querySelector<HTMLButtonElement>('[data-tool="bionic"]');
+  const syncBionic = () => {
+    const on = root.dataset.bionic !== 'off';
+    bionicBtn?.setAttribute('aria-pressed', String(on));
+    const state = bionicBtn?.querySelector('[data-state]');
+    if (state) state.textContent = on ? 'On' : 'Off';
+  };
+  bionicBtn?.addEventListener('click', () => {
+    root.dataset.bionic = root.dataset.bionic === 'off' ? 'on' : 'off';
+    save('bionic', root.dataset.bionic);
+    syncBionic();
+  });
+  syncBionic();
+
+  // ---- focus mode: one "## concept" at a time
+  const chunks = [...document.querySelectorAll<HTMLElement>('.prose .chunk')];
+  const focusBtn = document.querySelector<HTMLButtonElement>('[data-tool="focus"]');
+  const nav = document.querySelector<HTMLElement>('[data-focus-nav]');
+  const prev = nav?.querySelector<HTMLButtonElement>('[data-focus-prev]');
+  const next = nav?.querySelector<HTMLButtonElement>('[data-focus-next]');
+  const label = nav?.querySelector<HTMLElement>('[data-focus-label]');
+  const bar = nav?.querySelector<HTMLElement>('[data-focus-bar]');
+  let current = 0;
+
+  const titleOf = (chunk: HTMLElement) => chunk.querySelector('h2')?.textContent?.trim() || 'Introduction';
+
+  function show(index: number, scroll = true) {
+    current = Math.max(0, Math.min(index, chunks.length - 1));
+    chunks.forEach((c, i) => c.classList.toggle('is-current', i === current));
+    if (label) label.textContent = `${current + 1} / ${chunks.length} · ${titleOf(chunks[current])}`;
+    if (bar) bar.style.width = `${((current + 1) / chunks.length) * 100}%`;
+    if (prev) prev.disabled = current === 0;
+    if (next) next.textContent = current === chunks.length - 1 ? 'Finish ✓' : 'Next →';
+    if (scroll) chunks[current].scrollIntoView({ block: 'start' });
+  }
+
+  /** The concept the reader is currently looking at (used when switching focus mode on). */
+  function visibleChunk() {
+    let found = 0;
+    chunks.forEach((c, i) => {
+      if (c.getBoundingClientRect().top <= window.innerHeight * 0.4) found = i;
+    });
+    return found;
+  }
+
+  function syncFocus(startAt?: number) {
+    const on = root.dataset.focus === 'on';
+    focusBtn?.setAttribute('aria-pressed', String(on));
+    const state = focusBtn?.querySelector('[data-state]');
+    if (state) state.textContent = on ? 'On' : 'Off';
+    if (on && chunks.length) show(startAt ?? current);
+  }
+
+  focusBtn?.addEventListener('click', () => {
+    const turningOn = root.dataset.focus !== 'on';
+    const startAt = turningOn ? visibleChunk() : undefined;
+    root.dataset.focus = turningOn ? 'on' : 'off';
+    save('focus', root.dataset.focus);
+    syncFocus(startAt);
+  });
+
+  prev?.addEventListener('click', () => show(current - 1));
+  next?.addEventListener('click', () => {
+    if (current < chunks.length - 1) return show(current + 1);
+    // Last concept finished: take the reader to the "mark as revised" card.
+    document.querySelector('[data-revise-card]')?.scrollIntoView({ block: 'center' });
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (root.dataset.focus !== 'on' || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/^(input|textarea|select)$/i.test((e.target as HTMLElement).tagName)) return;
+    if (e.key === 'ArrowRight') show(current + 1);
+    if (e.key === 'ArrowLeft') show(current - 1);
+  });
+
+  // Table-of-contents links must open the right concept first when others are hidden.
+  const jumpTo = (id: string) => {
+    const target = id ? document.getElementById(decodeURIComponent(id)) : null;
+    const chunk = target?.closest<HTMLElement>('.chunk');
+    if (!target || !chunk) return false;
+    show(chunks.indexOf(chunk), false);
+    target.scrollIntoView({ block: 'start' });
+    return true;
+  };
+  document.querySelectorAll<HTMLAnchorElement>('.toc a').forEach((a) =>
+    a.addEventListener('click', (e) => {
+      if (root.dataset.focus === 'on' && jumpTo(a.hash.slice(1))) e.preventDefault();
+    }),
+  );
+
+  syncFocus();
+  if (root.dataset.focus === 'on' && location.hash) jumpTo(location.hash.slice(1));
+</script>

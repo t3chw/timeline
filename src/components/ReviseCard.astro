@@ -1,0 +1,65 @@
+---
+import { INTERVALS } from '../lib/revision';
+
+interface Props {
+  id: string;
+  /** Day the note was written, YYYY-MM-DD */
+  learned: string;
+}
+
+const { id, learned } = Astro.props;
+---
+
+<section class="revise-card" data-revise-card data-note-id={id} data-learned={learned}>
+  <div class="revise-text">
+    <h2>Revision</h2>
+    <p class="revise-status" data-revise-status aria-live="polite"></p>
+  </div>
+  <div class="revise-actions">
+    <button class="btn primary" type="button" data-revised>✓ I revised this</button>
+    <button class="btn" type="button" data-revisit>↺ Need to revisit</button>
+  </div>
+  <p class="revise-hint">
+    Saved in this browser. Reviews are spaced out: after {INTERVALS.slice(0, -1).join(', ')} and {INTERVALS.at(-1)} days.
+  </p>
+</section>
+
+<script>
+  import { INTERVALS, dueInfo, loadReviews, localToday, markRevised, markRevisit, refreshDueUI, relativeDay, shortDate } from '../lib/revision';
+
+  const card = document.querySelector<HTMLElement>('[data-revise-card]');
+  if (card) {
+    const note = { id: card.dataset.noteId!, date: card.dataset.learned!, title: '', subject: '', hue: 0 };
+    const status = card.querySelector<HTMLElement>('[data-revise-status]')!;
+    const pill = document.querySelector<HTMLElement>('[data-due-pill]');
+
+    const render = (message = '') => {
+      const today = localToday();
+      const review = loadReviews()[note.id];
+      const info = dueInfo(note, review, today);
+      const done = review?.stage ?? 0;
+
+      let text: string;
+      if (info.status === 'mastered') text = `Mastered. You have completed all ${INTERVALS.length} reviews.`;
+      else if (info.status === 'upcoming') text = `${done === 0 ? 'Not revised yet' : `Revised ${done}×`}. Next review ${relativeDay(info.due!, today)} (${shortDate(info.due!)}).`;
+      else if (info.status === 'today') text = `${done === 0 ? 'First review' : `Review ${done + 1}`} is due today.`;
+      else text = `${done === 0 ? 'First review' : `Review ${done + 1}`} was due ${shortDate(info.due!)}, so it is ${info.daysLate} ${info.daysLate === 1 ? 'day' : 'days'} overdue.`;
+
+      status.textContent = message ? `${message} ${text}` : text;
+      card.dataset.status = info.status;
+      if (pill) pill.hidden = !(info.status === 'today' || info.status === 'overdue');
+      refreshDueUI();
+    };
+
+    card.querySelector('[data-revised]')?.addEventListener('click', () => {
+      markRevised(note.id, localToday());
+      render('Nice work.');
+    });
+    card.querySelector('[data-revisit]')?.addEventListener('click', () => {
+      markRevisit(note.id, localToday());
+      render('No problem, it will come back tomorrow.');
+    });
+
+    render();
+  }
+</script>

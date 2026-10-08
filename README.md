@@ -18,6 +18,17 @@ That creates `src/content/entries/<today>-python-decorators.md` stamped with tod
 time. Fill in the body (Markdown) and save. The full list of front-matter fields is in
 [CLAUDE.md](CLAUDE.md#front-matter-reference).
 
+## Reading and revising
+
+Built to make notes easy to take in a little at a time:
+
+- **Bionic reading** is on by default (toggle at the top of every note).
+- A **dashed "concept done" line** separates each concept, and **focus mode** shows one concept at a time.
+- Every study note ends with **Test yourself** questions: try to answer before you open them.
+- **Revise** (`/revise`) schedules each note for review after 1, 3, 7, 14, 30, 60 and 120 days. Press
+  "I revised this" at the end of a note. The header shows how many are due. Progress is saved in your
+  browser only, so it does not sync between devices.
+
 ## Running it
 
 ```bash

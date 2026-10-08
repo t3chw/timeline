@@ -144,3 +144,42 @@ $$
 $$
 
 Zero covariance, zero correlation, yet not independent. This is the same trap covered in [Mutually exclusive vs independent events](/notes/2026-10-08-mutually-exclusive-vs-independent-events).
+
+## Test yourself
+
+Try to answer out loud before opening each one.
+
+<details>
+<summary>State the chain that shows independent variables have zero correlation.</summary>
+
+Independence $\Rightarrow$ $E[XY]=E[X]E[Y]$ $\Rightarrow$ $\operatorname{Cov}(X,Y)=0$ $\Rightarrow$ $\operatorname{Corr}(X,Y)=0$.
+
+</details>
+
+<details>
+<summary>Why does independence give E[XY] = E[X]E[Y]?</summary>
+
+The joint distribution factors into the product of the marginals, so the double sum (or integral) of $xy\,P(x)P(y)$ splits into $\big(\sum x\,P(x)\big)\big(\sum y\,P(y)\big)$.
+
+</details>
+
+<details>
+<summary>What is the shortcut formula for covariance?</summary>
+
+$\operatorname{Cov}(X,Y)=E[XY]-E[X]E[Y]$.
+
+</details>
+
+<details>
+<summary>Why does the last step need non-zero variances?</summary>
+
+$\operatorname{Corr}=\frac{\operatorname{Cov}}{\sigma_X\sigma_Y}$. If a variable is constant then $\sigma=0$ and the correlation is $0/0$, which is undefined.
+
+</details>
+
+<details>
+<summary>Why doesn't the proof work backwards? Give a counterexample.</summary>
+
+Correlation only detects **linear** association. Take $X$ uniform on $[-1,1]$ and $Y=X^2$: $\operatorname{Cov}=E[X^3]-E[X]E[X^2]=0$, yet $Y$ is completely determined by $X$.
+
+</details>

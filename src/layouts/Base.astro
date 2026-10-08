@@ -5,6 +5,7 @@ import '@fontsource-variable/jetbrains-mono';
 import '../styles/global.css';
 import '../styles/prose.css';
 import { site } from '../config';
+import { getNotes, subjectHue, dayKey } from '../lib/notes';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 
@@ -17,6 +18,18 @@ interface Props {
 
 const { title, description = site.tagline } = Astro.props;
 const fullTitle = title ? `${title} · ${site.title}` : site.title;
+
+// Light-weight list of every note, read by the revision features (due badge, Revise page).
+const notes = await getNotes();
+const notesData = JSON.stringify(
+  notes.map((n) => ({
+    id: n.id,
+    title: n.data.title,
+    subject: n.data.subject,
+    hue: subjectHue(n.data.subject),
+    date: dayKey(n.data.date),
+  })),
+).replace(/</g, '\\u003c');
 ---
 
 <!doctype html>
@@ -32,17 +45,26 @@ const fullTitle = title ? `${title} · ${site.title}` : site.title;
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
     <script is:inline>
-      // Set the theme before first paint so there is no light/dark flash.
+      // Apply saved preferences before first paint so nothing flashes.
+      // Bionic reading is ON unless the reader switched it off; focus mode is OFF unless switched on.
       (function () {
+        var root = document.documentElement;
+        root.dataset.bionic = 'on';
+        root.dataset.focus = 'off';
         try {
           var t = localStorage.getItem('theme');
           if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-          document.documentElement.dataset.theme = t;
-        } catch (e) {}
+          root.dataset.theme = t;
+          if (localStorage.getItem('bionic') === 'off') root.dataset.bionic = 'off';
+          if (localStorage.getItem('focus') === 'on') root.dataset.focus = 'on';
+        } catch (e) {
+          root.dataset.theme = 'light';
+        }
       })();
     </script>
   </head>
   <body>
+    <script is:inline type="application/json" id="notes-data" set:html={notesData} />
     <Header />
     <main>
       <slot />

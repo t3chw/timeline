@@ -262,3 +262,51 @@ No, not generally.
 
 **Q: Does independence mean no causal relationship?**
 No. Independence is a probabilistic relationship; causal claims require a causal framework or experimental design.
+
+## Test yourself
+
+Try to answer out loud before opening each one.
+
+<details>
+<summary>In one sentence each: what are mutually exclusive and independent events?</summary>
+
+**Mutually exclusive:** the events cannot happen together, $P(A\cap B)=0$.
+
+**Independent:** one happening does not change the probability of the other, $P(A\cap B)=P(A)P(B)$.
+
+</details>
+
+<details>
+<summary>Why can't mutually exclusive events with positive probability be independent?</summary>
+
+Mutually exclusive gives $P(A\cap B)=0$. Independent would need $P(A\cap B)=P(A)P(B)>0$. That is a contradiction.
+
+</details>
+
+<details>
+<summary>Can events that overlap still be independent? Give an example.</summary>
+
+Yes. Ace and Spade in a deck: $P(A\cap B)=\frac{1}{52}$ and $P(A)P(B)=\frac{4}{52}\cdot\frac{13}{52}=\frac{1}{52}$.
+
+</details>
+
+<details>
+<summary>If P(A) = 0.3 and P(B) = 0.4, what is P(A ∪ B) when they are independent, and when mutually exclusive?</summary>
+
+Independent: $0.3+0.4-0.12=0.58$. Mutually exclusive: $0.3+0.4=0.7$.
+
+</details>
+
+<details>
+<summary>What is P(A|B) if A and B are independent? And if they are mutually exclusive with P(B) > 0?</summary>
+
+Independent: $P(A)$. Mutually exclusive: $0$.
+
+</details>
+
+<details>
+<summary>Does zero correlation mean independence?</summary>
+
+No. Independence implies zero correlation, but not the other way round. For example $Y=X^2$ with $X$ symmetric around zero has zero correlation yet is fully dependent.
+
+</details>

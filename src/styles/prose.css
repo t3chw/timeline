@@ -203,3 +203,161 @@
 .prose pre[data-language='text'] {
   line-height: 1.25;
 }
+
+
+/* ------------------------------------------------------------------ bionic reading
+   The word starts are wrapped in <b class="bn"> when the site is built; this switch decides
+   whether they actually look bold. */
+.prose b.bn {
+  font-weight: inherit;
+}
+
+html[data-bionic='on'] .prose b.bn {
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------------ concepts ("chunks")
+   Every "## heading" and what follows is one <section class="chunk">. A dashed line marks
+   where one concept ends and the next begins. */
+.prose .chunk {
+  scroll-margin-top: calc(var(--header-h) + 1.5rem);
+}
+
+.prose .chunk > * + * {
+  margin-top: 1.15em;
+}
+
+.prose .chunk > :first-child {
+  margin-top: 0;
+}
+
+.prose .chunk + .chunk {
+  position: relative;
+  margin-top: 3.4rem;
+  padding-top: 2.8rem;
+  border-top: 2px dashed color-mix(in srgb, var(--ink-3) 55%, transparent);
+}
+
+.prose .chunk + .chunk::before {
+  content: '✓  concept done';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  padding: 0 0.9rem;
+  font: 600 0.68rem var(--font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-3);
+  background: var(--bg);
+  transform: translate(-50%, -50%);
+}
+
+.prose::after {
+  content: '✓  end of note';
+  display: block;
+  margin-top: 3.4rem;
+  padding-top: 1rem;
+  font: 600 0.68rem var(--font-sans);
+  letter-spacing: 0.14em;
+  text-align: center;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border-top: 2px dashed color-mix(in srgb, var(--ink-3) 55%, transparent);
+}
+
+/* sub-concepts get a lighter dotted divider */
+.prose :not(h2) + h3 {
+  padding-top: 1.6em;
+  border-top: 1.5px dotted var(--line-2);
+}
+
+/* ------------------------------------------------------------------ focus mode: one concept at a time */
+html[data-focus='on'] .prose {
+  font-size: 1.14rem;
+  line-height: 1.85;
+}
+
+html[data-focus='on'] .prose .chunk:not(.is-current) {
+  display: none;
+}
+
+html[data-focus='on'] .prose .chunk + .chunk {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+html[data-focus='on'] .prose .chunk + .chunk::before,
+html[data-focus='on'] .prose::after {
+  display: none;
+}
+
+html[data-focus='on'] .prose .chunk.is-current {
+  animation: chunk-in 0.3s ease;
+}
+
+@keyframes chunk-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* ------------------------------------------------------------------ "Test yourself" questions */
+.prose details {
+  padding: 0 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition: border-color 0.15s;
+}
+
+.prose details + details {
+  margin-top: 0.6rem;
+}
+
+.prose details[open] {
+  padding-bottom: 1rem;
+  border-color: var(--line-2);
+}
+
+.prose summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.85rem 0;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.prose summary::-webkit-details-marker {
+  display: none;
+}
+
+.prose summary::before {
+  content: '?';
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  margin-top: 0.2rem;
+  font: 700 0.8rem var(--font-sans);
+  color: var(--accent-ink);
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+  border-radius: 50%;
+}
+
+.prose details[open] > summary::before {
+  content: '✓';
+}
+
+.prose details > :not(summary) {
+  margin-left: 2.15rem;
+}
+
+.prose details > * + * {
+  margin-top: 0.8em;
+}

@@ -202,3 +202,44 @@ The $3\times 2$ matrix $A$ above maps $\mathbb R^2\rightarrow\mathbb R^3$, but i
 > **SVD** asks: "Which special input directions get transformed into special output directions, and by how much are they stretched?"
 
 That's the foundation to keep in mind before doing the actual SVD calculation.
+
+## Test yourself
+
+Try to answer out loud before opening each one.
+
+<details>
+<summary>What does SVD factor a matrix into, and what is the one-line intuition?</summary>
+
+$A=U\Sigma V^T$. Read it as **rotate, then stretch or compress, then rotate**.
+
+</details>
+
+<details>
+<summary>Why can't the eigenvalue equation work for a 3×2 matrix, but SVD can?</summary>
+
+$Av=\lambda v$ would set a 3D output equal to a 2D input, which makes no sense. SVD uses $Av_i=\sigma_i u_i$, where the input direction $v_i$ and the output direction $u_i$ are allowed to live in different spaces.
+
+</details>
+
+<details>
+<summary>What do V, Σ and U each represent?</summary>
+
+- Columns of $V$: **right singular vectors**, the special directions in the input space.
+- $\Sigma$: the **singular values**, how much each special direction is stretched or compressed.
+- Columns of $U$: **left singular vectors**, the matching directions in the output space.
+
+</details>
+
+<details>
+<summary>In what order is UΣVᵀx computed?</summary>
+
+Right to left: first $V^Tx$ (change coordinates), then $\Sigma$ (stretch or compress), then $U$ (rotate to the final orientation).
+
+</details>
+
+<details>
+<summary>A 3×2 matrix maps ℝ² → ℝ³. Does its output fill all of 3D space?</summary>
+
+No. The output lives in the **column space** of $A$, which has at most 2 dimensions here (rank at most 2).
+
+</details>

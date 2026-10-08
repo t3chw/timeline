@@ -5,6 +5,7 @@ const path = Astro.url.pathname;
 const links = [
   { href: '/', label: 'Timeline', current: path === '/' || path.startsWith('/notes') },
   { href: '/subjects', label: 'Subjects', current: path.startsWith('/subjects') },
+  { href: '/revise', label: 'Revise', current: path.startsWith('/revise'), badge: true },
 ];
 ---
 
@@ -18,10 +19,17 @@ const links = [
         <circle cx="11" cy="22" r="3" fill="#fff" />
         <path d="M18 10h6M18 22h6" stroke="#fff" stroke-width="2.4" stroke-linecap="round" />
       </svg>
-      {site.title}
+      <span class="brand-text">{site.title}</span>
     </a>
     <nav class="nav" aria-label="Main">
-      {links.map((l) => <a href={l.href} aria-current={l.current ? 'page' : undefined}>{l.label}</a>)}
+      {
+        links.map((l) => (
+          <a href={l.href} aria-current={l.current ? 'page' : undefined}>
+            {l.label}
+            {l.badge && <span class="badge" data-due-badge hidden aria-label="notes due">0</span>}
+          </a>
+        ))
+      }
     </nav>
     <button class="icon-btn" type="button" data-theme-toggle aria-label="Toggle light and dark theme">
       <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -36,6 +44,10 @@ const links = [
 </header>
 
 <script>
+  import { refreshDueUI } from '../lib/revision';
+
+  refreshDueUI();
+
   document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = next;

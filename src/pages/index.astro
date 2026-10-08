@@ -21,6 +21,14 @@ const years = groupTimeline(notes);
       {
         notes.length > 0 && (
           <>
+            <a class="due-banner" href="/revise" data-due-banner hidden>
+              <span class="due-count" data-due-count>0</span>
+              <span class="due-text">
+                <strong data-due-label>notes to revise today</strong>
+                <small>A quick review now keeps them from fading.</small>
+              </span>
+              <span class="due-go">Start →</span>
+            </a>
             <div class="stats">
               <div class="stat"><span class="n">{stats.notes}</span><span class="l">{stats.notes === 1 ? 'note' : 'notes'}</span></div>
               <div class="stat"><span class="n">{stats.days.length}</span><span class="l">{stats.days.length === 1 ? 'day' : 'days'} with notes</span></div>

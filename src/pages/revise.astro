@@ -1,0 +1,116 @@
+---
+import Base from '../layouts/Base.astro';
+import { INTERVALS } from '../lib/revision';
+---
+
+<Base title="Revise" description="Notes due for revision today, scheduled with spaced repetition.">
+  <div class="wrap">
+    <header class="page-head">
+      <p class="eyebrow">Spaced repetition</p>
+      <h1 class="page-title">Revise</h1>
+      <p class="lede">A few minutes a day beats a long session once a month. These are the notes that are ready for another look.</p>
+    </header>
+
+    <p class="rv-summary" id="rv-summary" aria-live="polite"></p>
+
+    <section class="rv-group" id="rv-due">
+      <div class="rv-head">
+        <h2>Due now <span class="rv-count" data-count>0</span></h2>
+        <a class="btn primary" id="rv-start" href="/" hidden>Start revising →</a>
+      </div>
+      <ul class="rv-list"></ul>
+      <div class="empty rv-empty" hidden>
+        <h3>You're all caught up</h3>
+        <p>Nothing is due right now. New notes become due the day after you write them.</p>
+      </div>
+    </section>
+
+    <section class="rv-group" id="rv-soon" hidden>
+      <div class="rv-head"><h2>Coming up <span class="rv-count" data-count>0</span></h2></div>
+      <ul class="rv-list"></ul>
+    </section>
+
+    <details class="rv-group rv-done" id="rv-done" hidden>
+      <summary><h2>Mastered <span class="rv-count" data-count>0</span></h2></summary>
+      <ul class="rv-list"></ul>
+    </details>
+
+    <section class="rv-how">
+      <h2>How it works</h2>
+      <ol>
+        <li>Read a note (try focus mode if it feels like a lot), then press <strong>I revised this</strong> at the bottom.</li>
+        <li>It comes back after {INTERVALS.slice(0, -1).join(', ')} and then {INTERVALS.at(-1)} days, a little further apart each time.</li>
+        <li>If it didn't stick, press <strong>Need to revisit</strong> and it returns tomorrow.</li>
+      </ol>
+      <p>Your progress is saved in this browser only, so it won't follow you to another device.</p>
+    </section>
+  </div>
+</Base>
+
+<script>
+  import { INTERVALS, isDue, loadReviews, localToday, readNotes, relativeDay, scheduleAll, shortDate } from '../lib/revision';
+  import type { DueInfo } from '../lib/revision';
+
+  const today = localToday();
+  const items = scheduleAll(readNotes(), loadReviews(), today);
+  const due = items.filter(isDue);
+  const soon = items.filter((i) => i.status === 'upcoming');
+  const done = items.filter((i) => i.status === 'mastered');
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function when(i: DueInfo): { text: string; tone: string } {
+    if (i.status === 'overdue') return { text: `${i.daysLate} ${i.daysLate === 1 ? 'day' : 'days'} overdue`, tone: 'late' };
+    if (i.status === 'today') return { text: 'Due today', tone: 'now' };
+    if (i.status === 'upcoming') return { text: `${relativeDay(i.due!, today)} · ${shortDate(i.due!)}`, tone: 'later' };
+    return { text: 'All reviews done', tone: 'later' };
+  }
+
+  function row(i: DueInfo) {
+    const li = el('li', 'rv-item sc');
+    li.style.setProperty('--h', String(i.hue));
+    const link = el('a', 'rv-link');
+    link.href = `/notes/${i.id}`;
+
+    const main = el('span', 'rv-main');
+    main.append(el('span', 'rv-title', i.title), el('span', 'rv-meta', `${i.subject} · learned ${shortDate(i.date)}`));
+
+    const side = el('span', 'rv-side');
+    const w = when(i);
+    side.append(el('span', `rv-when ${w.tone}`, w.text));
+    const dots = el('span', 'rv-dots');
+    dots.setAttribute('aria-label', `${i.stage} of ${INTERVALS.length} reviews done`);
+    for (let n = 0; n < INTERVALS.length; n++) dots.append(el('i', n < i.stage ? 'on' : ''));
+    side.append(dots);
+
+    link.append(main, side);
+    li.append(link);
+    return li;
+  }
+
+  function fill(id: string, list: DueInfo[]) {
+    const group = document.getElementById(id)!;
+    group.querySelector('.rv-list')!.replaceChildren(...list.map(row));
+    group.querySelector('[data-count]')!.textContent = String(list.length);
+    return group;
+  }
+
+  const dueGroup = fill('rv-due', due);
+  dueGroup.querySelector<HTMLElement>('.rv-empty')!.hidden = due.length > 0;
+  const start = document.getElementById('rv-start') as HTMLAnchorElement;
+  if (due.length) {
+    start.href = `/notes/${due[0].id}`;
+    start.hidden = false;
+  }
+  fill('rv-soon', soon).hidden = soon.length === 0;
+  fill('rv-done', done).hidden = done.length === 0;
+
+  const part = (n: number, word: string) => `${n} ${word}`;
+  document.getElementById('rv-summary')!.textContent =
+    [part(due.length, 'due now'), part(soon.length, 'coming up'), part(done.length, 'mastered')].join('  ·  ');
+</script>

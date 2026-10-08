@@ -69,6 +69,7 @@ export function plainText(md: string, keepCode = false): string {
   return md
     .replace(/```[\s\S]*?```/g, (block) => (keepCode ? block.replace(/^```.*$/gm, ' ') : ' '))
     .replace(/^#{1,6}\s+/gm, '')
+    .replace(/<\/?[a-z][^>]*>/gi, ' ')
     .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
     .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
     .replace(/[*_`>~|]+/g, '')

@@ -250,3 +250,52 @@ $$
 $$
 
 So eigenvectors and eigenspaces are directly connected to the null space.
+
+## Test yourself
+
+Try to answer out loud before opening each one.
+
+<details>
+<summary>What does it mean for v to be an eigenvector of A with eigenvalue λ?</summary>
+
+$Av=\lambda v$ with $v\neq 0$. The matrix keeps $v$ on the same line and only scales it by $\lambda$.
+
+</details>
+
+<details>
+<summary>How is the eigenspace related to the null space?</summary>
+
+$E_\lambda=\operatorname{Null}(A-\lambda I)$. It holds all eigenvectors for $\lambda$ plus the zero vector, and it is a subspace.
+
+</details>
+
+<details>
+<summary>What are algebraic and geometric multiplicity, and how do they compare?</summary>
+
+- **Algebraic:** how many times $\lambda$ is a root of the characteristic equation.
+- **Geometric:** the dimension of the eigenspace (how many independent eigenvectors).
+
+Always $1\leq\text{geometric}\leq\text{algebraic}$.
+
+</details>
+
+<details>
+<summary>For the matrix [[2, 1], [0, 2]], what are both multiplicities of λ = 2?</summary>
+
+Algebraic is **2**, because $(2-\lambda)^2=0$ repeats the root. Geometric is **1**, because the eigenspace is just the line $\{(x,0)\}$.
+
+</details>
+
+<details>
+<summary>Find the LU decomposition of [[2, 1], [6, 7]].</summary>
+
+The multiplier is $6/2=3$. Doing $R_2\leftarrow R_2-3R_1$ gives $U=\begin{bmatrix}2&1\\0&4\end{bmatrix}$, and $L=\begin{bmatrix}1&0\\3&1\end{bmatrix}$ holds the multiplier below the diagonal.
+
+</details>
+
+<details>
+<summary>Why is LU useful for solving Ax = b?</summary>
+
+$LUx=b$. Let $z=Ux$, solve $Lz=b$ by forward substitution, then $Ux=z$ by back substitution. Factor once, then reuse $L$ and $U$ for many different $b$.
+
+</details>
