@@ -1,0 +1,902 @@
+<!doctype html>
+<html lang="en" data-bionic="on" data-focus="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>makemore part 1: bigram language model (revision notes)</title>
+<script>
+(function(){var r=document.documentElement;try{var s=JSON.parse(localStorage.getItem('makemore-notes-v1')||'{}');
+if(s.bionic===false)r.setAttribute('data-bionic','off');if(s.focus===true)r.setAttribute('data-focus','on');
+var t=s.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');r.setAttribute('data-theme',t);}catch(e){}})();
+</script>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#faf8f4;--surface:#ffffff;--surface-2:#f2efe8;--ink:#1c1a17;--ink-2:#57524a;--ink-3:#8b857a;
+  --line:#e8e3d9;--line-2:#d6d0c2;
+  --accent:#2f9e6b;--accent-ink:#1d6b47;--accent-soft:#e1f2e9;
+  --warn:#b4531f;--warn-soft:#fbebe0;--info:#2b5fa8;--info-soft:#e5eefa;
+  --code-bg:#f5f2ea;--code-ink:#2a2723;--k:#8a3ea8;--s:#2f7d4f;--n:#b4531f;--c:#8b857a;--f:#2b5fa8;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --shadow:0 1px 2px rgba(60,40,10,.05),0 10px 28px -14px rgba(60,40,10,.18);
+}
+:root[data-theme=dark]{
+  color-scheme:dark;
+  --bg:#121110;--surface:#1b1a18;--surface-2:#252320;--ink:#f3f0ea;--ink-2:#bdb7ab;--ink-3:#847e72;
+  --line:#2c2a26;--line-2:#3b3833;
+  --accent:#46c28a;--accent-ink:#7fe0b2;--accent-soft:#15301f;
+  --warn:#f0905a;--warn-soft:#3a2418;--info:#7aa7e8;--info-soft:#18263a;
+  --code-bg:#161513;--code-ink:#e8e4dc;--k:#d29bf0;--s:#8fd6a8;--n:#f0a070;--c:#847e72;--f:#8fb8f2;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.6);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+[hidden]{display:none!important}
+
+/* ---------- top bar */
+.top{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.top .in{max-width:76rem;margin:0 auto;padding:.55rem 1.25rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.brand{font:600 1.05rem var(--serif);letter-spacing:-.01em;margin-right:auto;white-space:nowrap}
+.brand small{display:block;font:500 .72rem var(--sans);color:var(--ink-3);letter-spacing:0}
+.tool{display:inline-flex;align-items:center;gap:.45rem;padding:.38rem .5rem .38rem .8rem;font:500 .82rem var(--sans);
+  color:var(--ink-2);background:var(--surface);border:1px solid var(--line-2);border-radius:99px;cursor:pointer}
+.tool:hover{color:var(--ink);border-color:var(--ink-3)}
+.tool .st{font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.08rem .45rem;border-radius:99px;background:var(--surface-2);color:var(--ink-3)}
+.tool[aria-pressed=true]{color:var(--accent-ink);background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 55%,var(--line-2))}
+.tool[aria-pressed=true] .st{background:var(--accent-ink);color:var(--bg)}
+.tool.plain{padding:.38rem .8rem}
+#tocBtn{display:none}
+.prog{font:600 .78rem var(--sans);color:var(--ink-2);padding:.3rem .7rem;border-radius:99px;background:var(--surface-2);font-variant-numeric:tabular-nums}
+.pbar{height:3px;background:var(--surface-2)}
+.pbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+
+/* ---------- layout */
+.shell{max-width:76rem;margin:0 auto;padding:0 1.25rem 6rem;display:grid;grid-template-columns:17.5rem minmax(0,1fr);gap:2.5rem}
+#toc{position:sticky;top:4.6rem;align-self:start;max-height:calc(100vh - 5.4rem);overflow:auto;padding:1.4rem 0 1rem;font-size:.84rem}
+#toc h3{font:700 .68rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:1.1rem 0 .4rem}
+#toc h3:first-child{margin-top:0}
+#toc a{display:flex;gap:.5rem;align-items:baseline;padding:.28rem .6rem;border-radius:8px;text-decoration:none;color:var(--ink-2);line-height:1.35}
+#toc a:hover{background:var(--surface-2);color:var(--ink)}
+#toc a.active{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+#toc a .n{flex:none;width:1.6rem;color:var(--ink-3);font-variant-numeric:tabular-nums;font-size:.76rem}
+#toc a.done .n::after{content:"✓";color:var(--accent)}
+#toc a.done .n{font-size:0}
+#toc a.done .n::after{font-size:.9rem}
+main{min-width:0}
+
+/* ---------- intro + part banners */
+.intro{margin-top:2.2rem;padding:1.8rem 1.8rem 1.5rem;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.kicker{font:700 .72rem var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink)}
+.intro h1{font:600 clamp(2rem,5vw,3rem)/1.05 var(--serif);letter-spacing:-.03em;margin:.5rem 0 .8rem}
+.intro p{color:var(--ink-2);max-width:42rem;margin:.4rem 0}
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:.7rem;margin-top:1.2rem}
+.how div{padding:.75rem .9rem;border-radius:12px;background:var(--surface-2);font-size:.88rem;color:var(--ink-2)}
+.how div>b:not(.bn){display:block;color:var(--ink);margin-bottom:.15rem}
+.part{margin:4.2rem 0 0;padding:1.4rem 1.6rem;border-radius:16px;background:linear-gradient(135deg,var(--accent-soft),var(--surface));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line))}
+.part h2{font:600 1.7rem/1.15 var(--serif);letter-spacing:-.02em;margin:.3rem 0 .4rem}
+.part p{margin:.2rem 0;color:var(--ink-2);max-width:40rem}
+
+/* ---------- concept cards */
+.concept{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:1.4rem 1.6rem 1.2rem;
+  margin-top:2rem;box-shadow:var(--shadow);scroll-margin-top:5.2rem}
+.concept + .concept{margin-top:3.6rem}
+.concept + .concept::before{content:"";position:absolute;left:0;right:0;top:-1.8rem;height:2px;opacity:.6;
+  background:repeating-linear-gradient(90deg,var(--ink-3) 0 8px,transparent 8px 16px)}
+.concept + .concept::after{content:"✓  concept done";position:absolute;left:50%;top:-1.8rem;transform:translate(-50%,-50%);padding:0 .9rem;
+  background:var(--bg);font:600 .68rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.concept.done{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.chead{display:flex;align-items:flex-start;gap:.85rem;margin-bottom:.8rem}
+.num{flex:none;min-width:2.2rem;height:2.2rem;padding:0 .3rem;border-radius:99px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font:700 .82rem var(--sans);font-variant-numeric:tabular-nums}
+.chead h2{font:600 1.45rem/1.2 var(--serif);letter-spacing:-.015em;margin:.12rem 0 0}
+.time{margin-left:auto;flex:none;font:600 .74rem var(--mono);text-decoration:none;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);padding:.22rem .55rem;border-radius:99px;white-space:nowrap}
+.time:hover{color:var(--accent-ink);border-color:var(--accent)}
+.body p{margin:.7rem 0}
+.body ul,.body ol{padding-left:1.25rem;margin:.7rem 0}
+.body li{margin:.3rem 0}
+.body .lead{font-size:1.08rem;color:var(--ink)}
+.oneline{margin-top:1.2rem;padding:.7rem .95rem;border-radius:12px;background:var(--accent-soft);border-left:4px solid var(--accent);font-weight:600}
+.oneline small{display:block;font:700 .66rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:.1rem}
+.cfoot{display:flex;justify-content:flex-end;margin-top:1rem}
+.done-btn{font:600 .84rem var(--sans);padding:.45rem .95rem;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.done-btn:hover{border-color:var(--ink-3);color:var(--ink)}
+.concept.done .done-btn{background:var(--accent-ink);color:var(--bg);border-color:var(--accent-ink)}
+
+/* bionic */
+.bn{font-weight:inherit}
+html[data-bionic=on] .bn{font-weight:700}
+
+/* pieces */
+.code{background:var(--code-bg);border:1px solid var(--line);border-radius:12px;padding:.9rem 1rem;overflow:auto;font:.83rem/1.65 var(--mono);color:var(--code-ink);margin:1rem 0;tab-size:4}
+.code code{font:inherit}
+.tk-k{color:var(--k)}.tk-s{color:var(--s)}.tk-n{color:var(--n)}.tk-c{color:var(--c);font-style:italic}.tk-f{color:var(--f)}
+.shape{font:.8rem var(--mono);background:var(--info-soft);color:var(--info);padding:.05rem .4rem;border-radius:6px;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:.45rem;margin:.9rem 0}
+.chip{font:600 .84rem var(--mono);padding:.28rem .62rem;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
+.callout{margin:1rem 0;padding:.75rem .95rem;border-radius:12px;border-left:4px solid var(--accent);background:var(--accent-soft)}
+.callout .ctitle{display:block;font:700 .68rem var(--sans);letter-spacing:.14em;text-transform:uppercase;margin-bottom:.15rem;color:var(--accent-ink)}
+.callout.gotcha{border-color:var(--warn);background:var(--warn-soft)}.callout.gotcha .ctitle{color:var(--warn)}
+.callout.why{border-color:var(--info);background:var(--info-soft)}.callout.why .ctitle{color:var(--info)}
+.callout>div{font-size:.96rem}
+.callout p{margin:.35rem 0}
+table.t{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.9rem;display:block;overflow-x:auto}
+table.t th,table.t td{padding:.5rem .8rem;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+table.t th{background:var(--surface-2);font-weight:650;border-bottom-color:var(--line-2)}
+table.t td.m,table.t td code,.mono{font-family:var(--mono);font-size:.84rem}
+table.t tr.hl td{background:var(--accent-soft)}
+.formula{margin:1rem 0;padding:.9rem 1rem;border-radius:12px;background:var(--surface-2);text-align:center;font:1.12rem var(--serif);overflow-x:auto}
+.frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 .25em;font-size:.95em}
+.frac>span:first-child{border-bottom:1.5px solid currentColor;padding:0 .35em .1em}
+.frac>span:last-child{padding:.1em .35em 0}
+.formula i{font-family:var(--serif)}
+.fig{margin:1.2rem 0}
+.fig figcaption{font-size:.84rem;color:var(--ink-3);margin-top:.4rem;text-align:center}
+.d{width:100%;height:auto;display:block}
+.hint{color:var(--ink-3);font-size:.9rem}
+details.q{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:0 1rem;margin:.55rem 0}
+details.q[open]{border-color:var(--line-2);padding-bottom:.9rem}
+details.q summary{cursor:pointer;list-style:none;display:flex;gap:.7rem;align-items:flex-start;padding:.8rem 0;font-weight:600}
+details.q summary::-webkit-details-marker{display:none}
+details.q summary::before{content:"?";flex:none;display:grid;place-items:center;width:1.4rem;height:1.4rem;margin-top:.15rem;border-radius:50%;font:700 .78rem var(--sans);color:var(--accent-ink);background:var(--accent-soft)}
+details.q[open] summary::before{content:"✓"}
+details.q .ans{margin-left:2.1rem;color:var(--ink-2)}
+details.q .ans p{margin:.4rem 0}
+
+/* svg */
+.d .box{fill:var(--surface);stroke:var(--line-2);stroke-width:1.5}
+.d .box.acc{fill:var(--accent-soft);stroke:var(--accent)}
+.d .box.info{fill:var(--info-soft);stroke:var(--info)}
+.d .box.warn{fill:var(--warn-soft);stroke:var(--warn)}
+.d .cell{fill:var(--surface);stroke:var(--line-2);stroke-width:1.2}
+.d .cell.hl{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.8}
+.d .cell.sum{fill:var(--info-soft);stroke:var(--info)}
+.d .t{fill:var(--ink);font:600 13px var(--sans)}
+.d .tm{fill:var(--ink-2);font:12.5px var(--sans)}
+.d .ts{fill:var(--ink-3);font:11.5px var(--sans)}
+.d .tmono{fill:var(--ink);font:12.5px var(--mono)}
+.d .lane{fill:var(--ink-3);font:700 11px var(--sans);letter-spacing:.14em}
+.d .big{fill:var(--ink-2);font:600 26px var(--sans)}
+.d .ln{stroke:var(--ink-3);stroke-width:1.7;fill:none}
+.d .ln.acc{stroke:var(--accent)}.d .ln.warn{stroke:var(--warn)}
+.d .dash{stroke:var(--ink-3);stroke-width:1.5;stroke-dasharray:5 5}
+.d .axis{stroke:var(--ink-3);stroke-width:1.3}
+.d .grid{stroke:var(--line);stroke-width:1}
+.d .curve{fill:none;stroke:var(--accent);stroke-width:2.6}
+.d .pt{fill:var(--ink);stroke:var(--bg);stroke-width:2}.d .pt.acc{fill:var(--accent)}.d .pt.warn{fill:var(--warn)}
+.d .bar{fill:var(--line-2)}.d .bar.hot{fill:var(--accent)}
+.d .node{fill:var(--surface);stroke:var(--line-2);stroke-width:2}.d .node.acc{fill:var(--accent-soft);stroke:var(--accent)}
+.d .ball{fill:var(--info-soft);stroke:var(--info);stroke-width:2}
+#arr path{fill:var(--ink-3)}
+
+/* focus mode */
+html[data-focus=on] .concept:not(.current),html[data-focus=on] .part,html[data-focus=on] .intro{display:none}
+html[data-focus=on] .concept{margin-top:1.6rem}
+html[data-focus=on] .concept::before,html[data-focus=on] .concept::after{display:none}
+html[data-focus=on] .body{font-size:1.1rem;line-height:1.8}
+html[data-focus=on] .concept.current{animation:in .3s ease}
+@keyframes in{from{opacity:0;transform:translateY(8px)}}
+.fnav{display:none;position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);width:min(44rem,calc(100% - 1.5rem));z-index:60;
+  padding:.7rem .85rem .8rem;background:color-mix(in srgb,var(--surface) 94%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border:1px solid var(--line-2);border-radius:16px;box-shadow:0 12px 36px -12px rgba(0,0,0,.35)}
+html[data-focus=on] .fnav{display:block}
+.fbar{height:4px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-bottom:.65rem}
+.fbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.frow{display:flex;align-items:center;gap:.7rem}
+.flab{flex:1;min-width:0;text-align:center;font-size:.84rem;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{font:600 .86rem var(--sans);padding:.5rem 1rem;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+html[data-focus=on] main{padding-bottom:6rem}
+
+/* responsive */
+@media (max-width:40rem){
+  .top{position:static}
+  .brand{display:none}
+  .top .in{padding:.6rem 1rem}
+  .concept{scroll-margin-top:1rem}
+  .fig{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .fig .d{min-width:600px}
+  .fig figcaption{position:sticky;left:0;width:calc(100vw - 4rem)}
+}
+@media (max-width:62rem){
+  .shell{display:block}
+  #tocBtn{display:inline-flex}
+  #toc{display:none;position:fixed;z-index:70;left:0;right:0;top:0;bottom:0;max-height:none;background:var(--bg);padding:4.2rem 1.25rem 2rem}
+  #toc.open{display:block}
+  .time{margin-left:0}
+  .chead{flex-wrap:wrap}
+  .concept{padding:1.1rem 1.1rem 1rem}
+  .brand small{display:none}
+}
+@media print{
+  .top,#toc,.fnav,.cfoot{display:none!important}
+  .shell{display:block}
+  .concept{box-shadow:none;break-inside:avoid-page}
+  html[data-focus=on] .concept:not(.current),html[data-focus=on] .part{display:block!important}
+  details.q{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z"/></marker>
+</defs></svg>
+<header class="top"><div class="in">
+<button class="tool plain" id="tocBtn" type="button" aria-label="Contents">☰ Contents</button>
+<div class="brand">makemore · part 1<small>bigram language model</small></div>
+<span class="prog" id="progText">0 / 44 got it</span>
+<button class="tool" id="bionicBtn" type="button" aria-pressed="true"><span>Bionic reading</span><span class="st">On</span></button>
+<button class="tool" id="focusBtn" type="button" aria-pressed="false"><span>Focus mode</span><span class="st">Off</span></button>
+<button class="tool plain" id="themeBtn" type="button" aria-label="Toggle theme">◐ Theme</button>
+</div><div class="pbar"><i id="progBar"></i></div></header>
+<div class="shell">
+<nav id="toc" aria-label="Contents"></nav>
+<main>
+
+<section class="intro">
+<div class="kicker">Revision notes · Machine Learning</div>
+<h1>makemore, part 1: the bigram language model</h1>
+<p>Notes from Andrej Karpathy's lecture <b>“The spelled-out intro to language modeling: building makemore”</b> (1 h 57 min). They follow the order he teaches in, in my own words, with diagrams. Every <span class="mono">▶ time</span> chip opens the video at that moment.</p>
+<div class="how">
+<div><b>Bionic reading</b>The start of each word is bold to guide your eyes. Toggle it at the top.</div>
+<div><b>Focus mode</b>Shows one concept at a time. Use ← and → or the buttons.</div>
+<div><b>Got it</b>Tick each concept when you can explain it. Progress is saved in this browser.</div>
+<div><b>In one line</b>Every card ends with a single sentence to recall. Start there when revising.</div>
+</div>
+<p style="margin-top:1rem"><button class="tool plain" id="resetBtn" type="button">Reset my ticks</button></p>
+</section>
+<section class="part" id="p0" data-short="The goal"><div class="kicker">Part 0 · 0:00 – 3:03</div><h2>What are we building?</h2><p>Before any code: what makemore is, and the plan for the video.</p></section><section class="concept" id="c0" data-title="The goal: make more names" data-num="1" data-track><header class="chead"><span class="num">1</span><h2>The goal: make more names</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=0s" target="_blank" rel="noopener" title="Open the video at 0:00">&#9654; 0:00</a></header><div class="body">
+<p class="lead">makemore reads a file full of examples (here <b>32,033 first names</b>) and learns to <b>invent new ones that look like them</b>.</p>
+<ul>
+<li>It is a <b>character-level language model</b>. Each name is just a sequence of letters, and the model learns to predict <b>the next letter</b>.</li>
+<li>This video builds the simplest version, a <b>bigram model</b>, and builds it <b>two different ways</b> that end at the same place.</li>
+<li>Later videos widen it step by step: MLP, RNN, GRU, and finally a Transformer (about the size of GPT-2).</li>
+</ul>
+<figure class="fig"><svg class="d" viewBox="0 0 740 410" role="img" aria-label="Two ways to build the same bigram model"><text class="lane" x="10" y="24" text-anchor="start">WAY 1  ·  counting (Part 1)</text><text class="lane" x="10" y="186" text-anchor="start">WAY 2  ·  neural net (Part 2)</text><rect class="box" x="10" y="40" width="124" height="60" rx="10"/><text class="t" x="72.0" y="66.5" text-anchor="middle">names.txt</text><text class="tm" x="72.0" y="82.5" text-anchor="middle">32,033 names</text><line class="ln" x1="134" y1="70" x2="158" y2="70" marker-end="url(#arr)"/><rect class="box" x="158" y="40" width="124" height="60" rx="10"/><text class="t" x="220.0" y="66.5" text-anchor="middle">count every</text><text class="tm" x="220.0" y="82.5" text-anchor="middle">letter pair</text><line class="ln" x1="282" y1="70" x2="306" y2="70" marker-end="url(#arr)"/><rect class="box acc" x="306" y="40" width="124" height="60" rx="10"/><text class="t" x="368.0" y="66.5" text-anchor="middle">table N</text><text class="tm" x="368.0" y="82.5" text-anchor="middle">27x27 counts</text><line class="ln" x1="430" y1="70" x2="454" y2="70" marker-end="url(#arr)"/><rect class="box" x="454" y="40" width="124" height="60" rx="10"/><text class="t" x="516.0" y="66.5" text-anchor="middle">divide each</text><text class="tm" x="516.0" y="82.5" text-anchor="middle">row by its sum</text><line class="ln" x1="578" y1="70" x2="602" y2="70" marker-end="url(#arr)"/><rect class="box acc" x="602" y="40" width="124" height="60" rx="10"/><text class="t" x="664.0" y="66.5" text-anchor="middle">P</text><text class="tm" x="664.0" y="82.5" text-anchor="middle">27x27 probabilities</text><rect class="box" x="10" y="202" width="124" height="60" rx="10"/><text class="t" x="72.0" y="228.5" text-anchor="middle">(x, y) pairs</text><text class="tm" x="72.0" y="244.5" text-anchor="middle">from every name</text><line class="ln" x1="134" y1="232" x2="158" y2="232" marker-end="url(#arr)"/><rect class="box" x="158" y="202" width="124" height="60" rx="10"/><text class="t" x="220.0" y="228.5" text-anchor="middle">one-hot</text><text class="tm" x="220.0" y="244.5" text-anchor="middle">x becomes 27 numbers</text><line class="ln" x1="282" y1="232" x2="306" y2="232" marker-end="url(#arr)"/><rect class="box info" x="306" y="202" width="124" height="60" rx="10"/><text class="t" x="368.0" y="228.5" text-anchor="middle">W</text><text class="tm" x="368.0" y="244.5" text-anchor="middle">27x27 weights</text><line class="ln" x1="430" y1="232" x2="454" y2="232" marker-end="url(#arr)"/><rect class="box" x="454" y="202" width="124" height="60" rx="10"/><text class="t" x="516.0" y="228.5" text-anchor="middle">softmax</text><text class="tm" x="516.0" y="244.5" text-anchor="middle">gives probabilities</text><line class="ln" x1="578" y1="232" x2="602" y2="232" marker-end="url(#arr)"/><rect class="box info" x="602" y="202" width="124" height="60" rx="10"/><text class="t" x="664.0" y="228.5" text-anchor="middle">loss (NLL)</text><text class="tm" x="664.0" y="244.5" text-anchor="middle">score against true y</text><path class="ln acc" d="M664 262 C664 320 368 320 368 264" marker-end="url(#arr)"/><text class="tm" x="516" y="338" text-anchor="middle">gradient descent keeps adjusting W to lower the loss</text><rect class="box warn" x="10" y="356" width="716" height="44" rx="10"/><text class="t" x="368" y="383" text-anchor="middle">Both ways give (almost) the same model:  loss  ≈ 2.45  and the same kind of names</text></svg><figcaption>The two roads of the video. Same data in, same kind of model out, same score.</figcaption></figure>
+<div class="callout remember"><b class="ctitle">Remember</b><div>One score runs the whole video: the <b>average negative log-likelihood</b>, about <b>2.45</b> for the finished bigram model.</div></div>
+<div class="oneline"><small>In one line</small>A bigram model predicts the next letter from the previous one, and we build it by counting and again with a neural net.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p1" data-short="Part 1 · Counting"><div class="kicker">Part 1 · 3:03 – 1:03:51</div><h2>Way 1: the counting model</h2><p>Count every pair of neighbouring letters into a table, turn the table into probabilities, sample names from it, and score it.</p></section><section class="concept" id="c1" data-title="Load the dataset" data-num="2" data-track><header class="chead"><span class="num">2</span><h2>Load the dataset</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=183s" target="_blank" rel="noopener" title="Open the video at 3:03">&#9654; 3:03</a></header><div class="body">
+<p>Everything starts in a blank Jupyter notebook. Read the file and split it into one name per list item.</p>
+<pre class="code" data-lang="python"><code>words = open('names.txt', 'r').read().splitlines()
+words[:10]                    # emma, olivia, ava, isabella, sophia, ...
+len(words)                    # 32033
+min(len(w) for w in words)    # 2   (shortest name)
+max(len(w) for w in words)    # 15  (longest name)</code></pre>
+<p>The list looks sorted by how common each name is. We only need the names themselves.</p>
+<div class="oneline"><small>In one line</small>words is a plain Python list of 32,033 names, each 2 to 15 letters long.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c2" data-title="One name hides many examples" data-num="3" data-track><header class="chead"><span class="num">3</span><h2>One name hides many examples</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=258s" target="_blank" rel="noopener" title="Open the video at 4:18">&#9654; 4:18</a></header><div class="body">
+<p>Take <b>isabella</b>. It is not one example, it is <b>nine</b> little facts about what follows what:</p>
+<div class="chips "><span class="chip">start → i</span><span class="chip">i → s</span><span class="chip">s → a</span><span class="chip">a → b</span><span class="chip">b → e</span><span class="chip">e → l</span><span class="chip">l → l</span><span class="chip">l → a</span><span class="chip">a → end</span></div>
+<ul>
+<li>"i is a likely first letter", "s likely follows i", and so on.</li>
+<li>The last fact is easy to forget: after the final letter the <b>name ends</b>.</li>
+</ul>
+<p>A name with L letters gives <b>L + 1</b> facts, and we have 32,000 names. That is a lot of structure to learn.</p>
+<div class="oneline"><small>In one line</small>Every name is a pile of 'what comes next' facts, including the fact that it ends.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c3" data-title="The bigram idea" data-num="4" data-track><header class="chead"><span class="num">4</span><h2>The bigram idea</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=339s" target="_blank" rel="noopener" title="Open the video at 5:39">&#9654; 5:39</a></header><div class="body">
+<p>A <b>bigram</b> model looks at only <b>one</b> letter, the previous one, and predicts the next:</p>
+<ul>
+<li>What tends to follow <b>r</b>? What tends to follow <b>a</b>?</li>
+<li>It ignores everything earlier in the name.</li>
+</ul>
+<p>That makes it a very simple and <b>weak</b> model, but a great place to start.</p>
+<div class="oneline"><small>In one line</small>Bigram = predict the next letter using only the letter right before it.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c4" data-title="Neighbouring pairs with zip, plus start/end markers" data-num="5" data-track><header class="chead"><span class="num">5</span><h2>Neighbouring pairs with zip, plus start/end markers</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=396s" target="_blank" rel="noopener" title="Open the video at 6:36">&#9654; 6:36</a></header><div class="body">
+<p>To list every pair of neighbours, <code>zip</code> the word with itself shifted by one:</p>
+<pre class="code" data-lang="python"><code>for w in words[:3]:
+    chs = ['&lt;S&gt;'] + list(w) + ['&lt;E&gt;']      # add start and end markers
+    for ch1, ch2 in zip(chs, chs[1:]):
+        print(ch1, ch2)</code></pre>
+<div class="chips "><span class="chip">&lt;S&gt; e</span><span class="chip">e m</span><span class="chip">m m</span><span class="chip">m a</span><span class="chip">a &lt;E&gt;</span></div>
+<ul>
+<li><code>zip</code> stops as soon as the shorter list runs out. That is why "emma" gives 3 inner pairs, not 4.</li>
+<li>The <b>start</b> marker lets us learn which letters begin names. The <b>end</b> marker lets us learn when to stop.</li>
+<li>It is <code>list(w)</code> and not <code>[w]</code>, because a string put in a list stays one single item.</li>
+</ul>
+<div class="oneline"><small>In one line</small>zip(chs, chs[1:]) walks every neighbouring pair, and the markers add 'starts here' and 'ends here'.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c5" data-title="Count pairs in a dictionary" data-num="6" data-track><header class="chead"><span class="num">6</span><h2>Count pairs in a dictionary</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=564s" target="_blank" rel="noopener" title="Open the video at 9:24">&#9654; 9:24</a></header><div class="body">
+<pre class="code" data-lang="python"><code>b = {}
+for w in words:
+    chs = ['&lt;S&gt;'] + list(w) + ['&lt;E&gt;']
+    for ch1, ch2 in zip(chs, chs[1:]):
+        bigram = (ch1, ch2)
+        b[bigram] = b.get(bigram, 0) + 1     # 0 if never seen, then +1
+
+sorted(b.items(), key=lambda kv: -kv[1])     # biggest counts first</code></pre>
+<p><code>b.get(key, 0)</code> returns 0 for a pair we have not seen yet. Sorting by the count (the second item) shows what is most common:</p>
+<table class="t"><tr><th>pair</th><th>times</th><th>meaning</th></tr>
+<tr><td class="m">n → end</td><td class="m">6,763</td><td>names very often end in n</td></tr>
+<tr><td class="m">a → end</td><td class="m">6,640</td><td>and in a</td></tr>
+<tr><td class="m">a → n</td><td class="m">5,438</td><td>"an" is a very common pair</td></tr>
+<tr><td class="m">start → a</td><td class="m">4,410</td><td>many names begin with a</td></tr>
+<tr><td class="m">e → end</td><td class="m">3,983</td><td>and in e</td></tr></table>
+<div class="oneline"><small>In one line</small>A dictionary of pair counts already holds everything a bigram model knows.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c6" data-title="Move the counts into a 2D tensor" data-num="7" data-track><header class="chead"><span class="num">7</span><h2>Move the counts into a 2D tensor</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=765s" target="_blank" rel="noopener" title="Open the video at 12:45">&#9654; 12:45</a></header><div class="body">
+<p>A dictionary is awkward. A <b>2D array</b> is easier: <b>row = first letter, column = second letter</b>, value = how often.</p>
+<pre class="code" data-lang="python"><code>import torch
+N = torch.zeros((28, 28), dtype=torch.int32)   # 26 letters + &lt;S&gt; + &lt;E&gt;
+
+chars = sorted(list(set(''.join(words))))      # 'a'..'z'
+stoi = {s: i for i, s in enumerate(chars)}     # char -&gt; int
+stoi['&lt;S&gt;'] = 26
+stoi['&lt;E&gt;'] = 27
+itos = {i: s for s, i in stoi.items()}         # int -&gt; char (the reverse)
+
+for w in words:
+    chs = ['&lt;S&gt;'] + list(w) + ['&lt;E&gt;']
+    for ch1, ch2 in zip(chs, chs[1:]):
+        N[stoi[ch1], stoi[ch2]] += 1</code></pre>
+<ul>
+<li>Tensors default to <b>float32</b>. For counts we ask for integers with <code>dtype=torch.int32</code>.</li>
+<li>Arrays are indexed with integers, so we need the <b>char ↔ int lookup tables</b> (<code>stoi</code> and <code>itos</code>).</li>
+</ul>
+<div class="oneline"><small>In one line</small>N[row, col] += 1 fills a table of counts, using stoi to turn letters into row and column numbers.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c7" data-title="Look at the table" data-num="8" data-track><header class="chead"><span class="num">8</span><h2>Look at the table</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=1099s" target="_blank" rel="noopener" title="Open the video at 18:19">&#9654; 18:19</a></header><div class="body">
+<p><code>plt.imshow(N)</code> works but is ugly. He writes a small loop that prints each cell's letter pair and its count on top of a blue heat map:</p>
+<pre class="code" data-lang="python"><code>plt.figure(figsize=(16, 16))
+plt.imshow(N, cmap='Blues')
+for i in range(27):
+    for j in range(27):
+        chstr = itos[i] + itos[j]
+        plt.text(j, i, chstr, ha='center', va='bottom', color='gray')
+        plt.text(j, i, N[i, j].item(), ha='center', va='top', color='gray')
+plt.axis('off')</code></pre>
+<ul>
+<li><code>N[i, j]</code> is still a one-element tensor. <b><code>.item()</code></b> pulls out the plain Python number.</li>
+<li>Looking at the picture he spots <b>wasted space</b>. Next card.</li>
+</ul>
+<div class="oneline"><small>In one line</small>.item() turns a one-element tensor into a normal number, handy for printing.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c8" data-title="One special token instead of two" data-num="9" data-track><header class="chead"><span class="num">9</span><h2>One special token instead of two</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=1254s" target="_blank" rel="noopener" title="Open the video at 20:54">&#9654; 20:54</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 760 262" role="img" aria-label="Anatomy of the 27x27 count table"><text class="t" x="286" y="30" text-anchor="middle">second character  (the one that comes NEXT)</text><text class="t" transform="translate(28 158) rotate(-90)" text-anchor="middle">first char  (PREVIOUS)</text><text class="tmono" x="169.0" y="60" text-anchor="middle">.</text><text class="tmono" x="116" y="96.5" text-anchor="end">.</text><text class="tmono" x="247.0" y="60" text-anchor="middle">a</text><text class="tmono" x="116" y="140.5" text-anchor="end">a</text><text class="tmono" x="325.0" y="60" text-anchor="middle">e</text><text class="tmono" x="116" y="184.5" text-anchor="end">e</text><text class="tmono" x="403.0" y="60" text-anchor="middle">n</text><text class="tmono" x="116" y="228.5" text-anchor="end">n</text><rect class="cell" x="130" y="70" width="78" height="44"/><text class="tmono" x="169.0" y="96.5" text-anchor="middle">0</text><rect class="cell hl" x="208" y="70" width="78" height="44"/><text class="tmono" x="247.0" y="96.5" text-anchor="middle">4410</text><rect class="cell" x="286" y="70" width="78" height="44"/><text class="tmono" x="325.0" y="96.5" text-anchor="middle">…</text><rect class="cell" x="364" y="70" width="78" height="44"/><text class="tmono" x="403.0" y="96.5" text-anchor="middle">…</text><rect class="cell" x="130" y="114" width="78" height="44"/><text class="tmono" x="169.0" y="140.5" text-anchor="middle">6640</text><rect class="cell" x="208" y="114" width="78" height="44"/><text class="tmono" x="247.0" y="140.5" text-anchor="middle">…</text><rect class="cell" x="286" y="114" width="78" height="44"/><text class="tmono" x="325.0" y="140.5" text-anchor="middle">…</text><rect class="cell hl" x="364" y="114" width="78" height="44"/><text class="tmono" x="403.0" y="140.5" text-anchor="middle">5438</text><rect class="cell" x="130" y="158" width="78" height="44"/><text class="tmono" x="169.0" y="184.5" text-anchor="middle">3983</text><rect class="cell" x="208" y="158" width="78" height="44"/><text class="tmono" x="247.0" y="184.5" text-anchor="middle">…</text><rect class="cell" x="286" y="158" width="78" height="44"/><text class="tmono" x="325.0" y="184.5" text-anchor="middle">…</text><rect class="cell" x="364" y="158" width="78" height="44"/><text class="tmono" x="403.0" y="184.5" text-anchor="middle">…</text><rect class="cell" x="130" y="202" width="78" height="44"/><text class="tmono" x="169.0" y="228.5" text-anchor="middle">6763</text><rect class="cell" x="208" y="202" width="78" height="44"/><text class="tmono" x="247.0" y="228.5" text-anchor="middle">…</text><rect class="cell" x="286" y="202" width="78" height="44"/><text class="tmono" x="325.0" y="228.5" text-anchor="middle">…</text><rect class="cell" x="364" y="202" width="78" height="44"/><text class="tmono" x="403.0" y="228.5" text-anchor="middle">…</text><rect class="box acc" x="470" y="70" width="270" height="56" rx="10"/><text class="t" x="605" y="94" text-anchor="middle">row a, column n = 5,438</text><text class="tm" x="605" y="112" text-anchor="middle">after an 'a', an 'n' came next 5,438 times</text><rect class="box acc" x="470" y="142" width="270" height="56" rx="10"/><text class="t" x="605" y="166" text-anchor="middle">row '.', column a = 4,410</text><text class="tm" x="605" y="184" text-anchor="middle">4,410 names start with 'a'</text><rect class="box" x="470" y="214" width="270" height="40" rx="10"/><text class="tm" x="605" y="239" text-anchor="middle">column '.' = how often a letter ENDS a name</text></svg><figcaption>Excerpt of the real table (… = not shown). Row = previous character, column = next character.</figcaption></figure>
+<ul>
+<li>The <b>end</b> token can never come first in a pair, so its whole row is zeros.</li>
+<li>The <b>start</b> token can never come second, so its whole column is zeros.</li>
+</ul>
+<p>Fix: use <b>one</b> special token, a dot <code>.</code>, and put it at <b>index 0</b>. Letters shift to 1 to 26, and the table becomes <b>27 × 27</b>.</p>
+<pre class="code" data-lang="python"><code>stoi = {s: i + 1 for i, s in enumerate(chars)}   # a=1 ... z=26
+stoi['.'] = 0</code></pre>
+<p><b>Row 0</b> = how often each letter <b>starts</b> a name. <b>Column 0</b> = how often each letter <b>ends</b> one. The pair ". ." never happens (no empty names).</p>
+<div class="oneline"><small>In one line</small>Use a single '.' at index 0 for both start and end, giving a clean 27 x 27 table.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c9" data-title="A row is a probability distribution" data-num="10" data-track><header class="chead"><span class="num">10</span><h2>A row is a probability distribution</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=1442s" target="_blank" rel="noopener" title="Open the video at 24:02">&#9654; 24:02</a></header><div class="body">
+<p>The table holds all we need to <b>sample</b> names. To pick a first letter, look at <b>row 0</b>:</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 232" role="img" aria-label="Bar chart of first-letter counts"><rect class="bar hot" x="20" y="50.0" width="20" height="150.0" rx="3"/><text class="tmono" x="30" y="216" text-anchor="middle">a</text><text class="ts" x="30" y="44.0" text-anchor="middle">4,410</text><rect class="bar" x="48" y="155.6" width="20" height="44.4" rx="3"/><text class="tmono" x="58" y="216" text-anchor="middle">b</text><rect class="bar" x="76" y="147.6" width="20" height="52.4" rx="3"/><text class="tmono" x="86" y="216" text-anchor="middle">c</text><rect class="bar" x="104" y="142.5" width="20" height="57.5" rx="3"/><text class="tmono" x="114" y="216" text-anchor="middle">d</text><rect class="bar" x="132" y="147.9" width="20" height="52.1" rx="3"/><text class="tmono" x="142" y="216" text-anchor="middle">e</text><rect class="bar" x="160" y="185.8" width="20" height="14.2" rx="3"/><text class="tmono" x="170" y="216" text-anchor="middle">f</text><rect class="bar" x="188" y="177.2" width="20" height="22.8" rx="3"/><text class="tmono" x="198" y="216" text-anchor="middle">g</text><rect class="bar" x="216" y="170.3" width="20" height="29.7" rx="3"/><text class="tmono" x="226" y="216" text-anchor="middle">h</text><rect class="bar" x="244" y="179.9" width="20" height="20.1" rx="3"/><text class="tmono" x="254" y="216" text-anchor="middle">i</text><rect class="bar hot" x="272" y="117.6" width="20" height="82.4" rx="3"/><text class="tmono" x="282" y="216" text-anchor="middle">j</text><text class="ts" x="282" y="111.6" text-anchor="middle">2,422</text><rect class="bar hot" x="300" y="99.2" width="20" height="100.8" rx="3"/><text class="tmono" x="310" y="216" text-anchor="middle">k</text><text class="ts" x="310" y="93.2" text-anchor="middle">2,963</text><rect class="bar" x="328" y="146.5" width="20" height="53.5" rx="3"/><text class="tmono" x="338" y="216" text-anchor="middle">l</text><rect class="bar hot" x="356" y="113.7" width="20" height="86.3" rx="3"/><text class="tmono" x="366" y="216" text-anchor="middle">m</text><text class="ts" x="366" y="107.7" text-anchor="middle">2,538</text><rect class="bar" x="384" y="161.0" width="20" height="39.0" rx="3"/><text class="tmono" x="394" y="216" text-anchor="middle">n</text><rect class="bar" x="412" y="186.6" width="20" height="13.4" rx="3"/><text class="tmono" x="422" y="216" text-anchor="middle">o</text><rect class="bar" x="440" y="182.5" width="20" height="17.5" rx="3"/><text class="tmono" x="450" y="216" text-anchor="middle">p</text><rect class="bar" x="468" y="196.9" width="20" height="3.1" rx="3"/><text class="tmono" x="478" y="216" text-anchor="middle">q</text><rect class="bar" x="496" y="144.3" width="20" height="55.7" rx="3"/><text class="tmono" x="506" y="216" text-anchor="middle">r</text><rect class="bar hot" x="524" y="130.1" width="20" height="69.9" rx="3"/><text class="tmono" x="534" y="216" text-anchor="middle">s</text><text class="ts" x="534" y="124.1" text-anchor="middle">2,055</text><rect class="bar" x="552" y="155.5" width="20" height="44.5" rx="3"/><text class="tmono" x="562" y="216" text-anchor="middle">t</text><rect class="bar" x="580" y="197.3" width="20" height="2.7" rx="3"/><text class="tmono" x="590" y="216" text-anchor="middle">u</text><rect class="bar" x="608" y="187.2" width="20" height="12.8" rx="3"/><text class="tmono" x="618" y="216" text-anchor="middle">v</text><rect class="bar" x="636" y="189.6" width="20" height="10.4" rx="3"/><text class="tmono" x="646" y="216" text-anchor="middle">w</text><rect class="bar" x="664" y="195.4" width="20" height="4.6" rx="3"/><text class="tmono" x="674" y="216" text-anchor="middle">x</text><rect class="bar" x="692" y="181.8" width="20" height="18.2" rx="3"/><text class="tmono" x="702" y="216" text-anchor="middle">y</text><rect class="bar" x="720" y="168.4" width="20" height="31.6" rx="3"/><text class="tmono" x="730" y="216" text-anchor="middle">z</text><text class="t" x="20" y="22" text-anchor="start">How many names START with each letter  (this is the first row, '.', of the table)</text></svg><figcaption>Row '.' of the table: 'a' starts the most names (4,410), then k, m, j, s. They add up to all 32,033 names.</figcaption></figure>
+<p>Counts are not probabilities yet. Convert to float and divide by the row total so it sums to 1:</p>
+<pre class="code" data-lang="python"><code>p = N[0].float()
+p = p / p.sum()          # now sums to 1, shape (27,)</code></pre>
+<p>For example 'a' starts 4,410 of 32,033 names, so its probability is about <b>0.138</b>.</p>
+<div class="oneline"><small>In one line</small>Divide a row of counts by its sum and you get the probabilities of the next letter.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c10" data-title="Drawing samples with torch.multinomial" data-num="11" data-track><header class="chead"><span class="num">11</span><h2>Drawing samples with torch.multinomial</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=1588s" target="_blank" rel="noopener" title="Open the video at 26:28">&#9654; 26:28</a></header><div class="body">
+<p><code>torch.multinomial</code> takes probabilities and returns <b>integers drawn according to them</b>. Seed a generator so everyone gets the same numbers:</p>
+<pre class="code" data-lang="python"><code>g = torch.Generator().manual_seed(2147483647)
+p = torch.rand(3, generator=g)
+p = p / p.sum()                           # [0.6064, 0.3033, 0.0903]
+torch.multinomial(p, num_samples=20, replacement=True, generator=g)</code></pre>
+<ul>
+<li>With p = 60% / 30% / 10%, about 60% of the draws are 0, 30% are 1, and only a few are 2. More draws means closer to those numbers.</li>
+<li>Using the real first row, the first draw is index 13, which is <b>m</b>. That is a fair draw: m starts about 2,500 names, just under 10%.</li>
+</ul>
+<div class="callout gotcha"><b class="ctitle">Watch out</b><div><code>replacement=True</code> is needed to draw many samples. By default it is False, which he calls odd and easy to forget.</div></div>
+<div class="oneline"><small>In one line</small>multinomial turns a probability row into one random letter, and a seeded generator makes it repeatable.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c11" data-title="The sampling loop" data-num="12" data-track><header class="chead"><span class="num">12</span><h2>The sampling loop</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=1892s" target="_blank" rel="noopener" title="Open the video at 31:32">&#9654; 31:32</a></header><div class="body">
+<pre class="code" data-lang="python"><code>ix = 0                                    # start at the '.' token
+out = []
+while True:
+    p = N[ix].float()
+    p = p / p.sum()
+    ix = torch.multinomial(p, num_samples=1, replacement=True, generator=g).item()
+    out.append(itos[ix])
+    if ix == 0:                           # drew '.', the name is finished
+        break
+print(''.join(out))</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 780 230" role="img" aria-label="The sampling loop"><circle class="node acc" cx="70" cy="90" r="30"/><text class="t" x="70" y="95" text-anchor="middle">.</text><text class="ts" x="70" y="142" text-anchor="middle">ix = 0</text><circle class="node" cx="235" cy="90" r="30"/><text class="t" x="235" y="95" text-anchor="middle">m</text><circle class="node" cx="400" cy="90" r="30"/><text class="t" x="400" y="95" text-anchor="middle">o</text><circle class="node" cx="565" cy="90" r="30"/><text class="t" x="565" y="95" text-anchor="middle">r</text><circle class="node acc" cx="710" cy="90" r="30"/><text class="t" x="710" y="95" text-anchor="middle">.</text><text class="ts" x="710" y="142" text-anchor="middle">ix = 0 again</text><line class="ln" x1="100" y1="90" x2="205" y2="90" marker-end="url(#arr)"/><text class="ts" x="152.5" y="66" text-anchor="middle">draw from row '.'</text><line class="ln" x1="265" y1="90" x2="370" y2="90" marker-end="url(#arr)"/><text class="ts" x="317.5" y="66" text-anchor="middle">draw from row 'm'</text><line class="ln" x1="430" y1="90" x2="535" y2="90" marker-end="url(#arr)"/><text class="ts" x="482.5" y="66" text-anchor="middle">draw from row 'o'</text><line class="ln" x1="595" y1="90" x2="680" y2="90" marker-end="url(#arr)"/><text class="ts" x="637.5" y="66" text-anchor="middle">draw from row 'r'</text><text class="t" x="390" y="190" text-anchor="middle">output: m o r  →  “mor”</text><text class="tm" x="390" y="212" text-anchor="middle">each step looks up one row, draws one letter, and stops when it draws '.'</text></svg><figcaption>Sampling = keep drawing the next letter from the row of the previous letter.</figcaption></figure>
+<p>Each step uses the <b>row of the letter we just drew</b> to pick the next one.</p>
+<div class="oneline"><small>In one line</small>Sampling = start at '.', keep drawing from the current letter's row, stop when '.' comes up.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c12" data-title="The names are bad, and why" data-num="13" data-track><header class="chead"><span class="num">13</span><h2>The names are bad, and why</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=2045s" target="_blank" rel="noopener" title="Open the video at 34:05">&#9654; 34:05</a></header><div class="body">
+<p>Sampled names: <div class="chips "><span class="chip">mor.</span><span class="chip">axx.</span><span class="chip">minaymoryles.</span><span class="chip">kondlaisah.</span><span class="chip">anchshizarie.</span><span class="chip">odaren.</span><span class="chip">h.</span><span class="chip">a.</span></div></p>
+<ul>
+<li>They are vaguely name-like but "totally messed up", including one-letter names like <b>h</b> and <b>a</b>.</li>
+<li>His explanation: <b>think from the model's eyes</b>. It only sees the previous letter. After an <b>h</b> it knows h can end a name, but it has no idea that this h was also the <b>first</b> letter.</li>
+</ul>
+<div class="callout why"><b class="ctitle">Sanity check he runs</b><div>Replace the row with a <b>uniform</b> distribution (<code>torch.ones(27) / 27</code>). The output is pure garbage. So the trained table is clearly learning something; a bigram is just too weak.</div></div>
+<div class="oneline"><small>In one line</small>A bigram sees one letter of context, so its names are only roughly name-like.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c13" data-title="Precompute the probability matrix" data-num="14" data-track><header class="chead"><span class="num">14</span><h2>Precompute the probability matrix</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=2177s" target="_blank" rel="noopener" title="Open the video at 36:17">&#9654; 36:17</a></header><div class="body">
+<p>Re-normalising a row inside the loop, every single step, is wasteful. Do it <b>once</b> for the whole table.</p>
+<pre class="code" data-lang="python"><code>P = N.float()
+P /= P.sum(1, keepdim=True)     # each row now sums to 1</code></pre>
+<ul>
+<li><code>P /= ...</code> is <b>in-place</b>: no new tensor is created, so it can be faster.</li>
+<li>He also wants the practice: building up to transformers needs <b>comfort with n-dimensional tensors and broadcasting</b>.</li>
+</ul>
+<p>Careful though: the arguments <code>1</code> and <code>keepdim=True</code> matter a lot. Next three cards.</p>
+<div class="oneline"><small>In one line</small>P holds a ready-made probability row for every letter, so sampling just reads P[ix].</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c14" data-title="sum() with dim and keepdim" data-num="15" data-track><header class="chead"><span class="num">15</span><h2>sum() with dim and keepdim</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=2275s" target="_blank" rel="noopener" title="Open the video at 37:55">&#9654; 37:55</a></header><div class="body">
+<p><code>P.sum()</code> alone adds <b>everything</b> into one number. We want one total <b>per row</b>.</p>
+<table class="t"><tr><th>call</th><th>result shape</th><th>what you get</th></tr>
+<tr><td class="m">P.sum()</td><td><span class="shape">()</span></td><td>one number, the grand total (wrong for us)</td></tr>
+<tr><td class="m">P.sum(0, keepdim=True)</td><td><span class="shape">(1, 27)</span></td><td>column totals, as a row vector</td></tr>
+<tr class="hl"><td class="m">P.sum(1, keepdim=True)</td><td><span class="shape">(27, 1)</span></td><td>row totals, as a column vector (what we need)</td></tr>
+<tr><td class="m">P.sum(1)</td><td><span class="shape">(27)</span></td><td>same totals, but the size-1 dimension is squeezed away</td></tr></table>
+<ul>
+<li><b>dim</b> says which dimension to add up along: 0 = down the rows, 1 = across the columns.</li>
+<li><b>keepdim=True</b> keeps that dimension as size 1 instead of deleting it.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Use sum(1, keepdim=True) to get a (27, 1) column of row totals.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c15" data-title="Broadcasting rules" data-num="16" data-track><header class="chead"><span class="num">16</span><h2>Broadcasting rules</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=2491s" target="_blank" rel="noopener" title="Open the video at 41:31">&#9654; 41:31</a></header><div class="body">
+<p>Can we divide a <span class="shape">(27, 27)</span> tensor by a <span class="shape">(27, 1)</span> tensor? That is decided by the <b>broadcasting rules</b>:</p>
+<ol>
+<li>Line the shapes up from the <b>right</b>.</li>
+<li>Going right to left, each pair of sizes must be <b>equal</b>, or <b>one of them is 1</b>, or one is <b>missing</b>.</li>
+</ol>
+<p>Here the last sizes are 27 and 1 (one is 1, fine) and the first sizes are 27 and 27 (equal, fine). So it works: PyTorch <b>stretches</b> the size-1 dimension by copying it 27 times, then divides element by element. Every row ends up divided by <b>its own</b> total.</p>
+<p>Check: <code>P[0].sum()</code> is 1.</p>
+<div class="callout gotcha"><b class="ctitle">His warning</b><div>Treat broadcasting <b>with respect</b>. Read the docs, practise it, and check your work, because it can create very subtle bugs.</div></div>
+<div class="oneline"><small>In one line</small>Shapes are lined up from the right; a size of 1 gets copied to match, so (27,27) / (27,1) divides each row by its own total.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c16" data-title="The silent broadcasting bug" data-num="17" data-track><header class="chead"><span class="num">17</span><h2>The silent broadcasting bug</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=2670s" target="_blank" rel="noopener" title="Open the video at 44:30">&#9654; 44:30</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 780 336" role="img" aria-label="Broadcasting with and without keepdim"><text class="t" x="190" y="26" text-anchor="middle">keepdim=True</text><text class="tmono" x="190" y="46" text-anchor="middle">sums have shape (3, 1)</text><rect class="cell" x="30" y="70" width="52" height="40"/><text class="tmono" x="56.0" y="94.5" text-anchor="middle">1</text><rect class="cell" x="82" y="70" width="52" height="40"/><text class="tmono" x="108.0" y="94.5" text-anchor="middle">3</text><rect class="cell" x="134" y="70" width="52" height="40"/><text class="tmono" x="160.0" y="94.5" text-anchor="middle">0</text><rect class="cell" x="30" y="110" width="52" height="40"/><text class="tmono" x="56.0" y="134.5" text-anchor="middle">3</text><rect class="cell" x="82" y="110" width="52" height="40"/><text class="tmono" x="108.0" y="134.5" text-anchor="middle">2</text><rect class="cell" x="134" y="110" width="52" height="40"/><text class="tmono" x="160.0" y="134.5" text-anchor="middle">4</text><rect class="cell" x="30" y="150" width="52" height="40"/><text class="tmono" x="56.0" y="174.5" text-anchor="middle">0</text><rect class="cell" x="82" y="150" width="52" height="40"/><text class="tmono" x="108.0" y="174.5" text-anchor="middle">4</text><rect class="cell" x="134" y="150" width="52" height="40"/><text class="tmono" x="160.0" y="174.5" text-anchor="middle">5</text><rect class="cell sum" x="226" y="70" width="52" height="40"/><text class="tmono" x="252.0" y="94.5" text-anchor="middle">4</text><rect class="cell sum" x="226" y="110" width="52" height="40"/><text class="tmono" x="252.0" y="134.5" text-anchor="middle">9</text><rect class="cell sum" x="226" y="150" width="52" height="40"/><text class="tmono" x="252.0" y="174.5" text-anchor="middle">9</text><line class="ln acc" x1="222" y1="90.0" x2="194" y2="90.0" marker-end="url(#arr)"/><line class="ln acc" x1="222" y1="130.0" x2="194" y2="130.0" marker-end="url(#arr)"/><line class="ln acc" x1="222" y1="170.0" x2="194" y2="170.0" marker-end="url(#arr)"/><text class="ts" x="252.0" y="62" text-anchor="middle">row sums</text><text class="tm" x="190" y="218" text-anchor="middle">the column is copied SIDEWAYS</text><text class="tm" x="190" y="238" text-anchor="middle">each row ÷ its own sum</text><rect class="box acc" x="50" y="280" width="280" height="40" rx="10"/><text class="t" x="190" y="305" text-anchor="middle">row 0 = .25 + .75 + 0 = 1  ✓</text><text class="t" x="590" y="26" text-anchor="middle">no keepdim</text><text class="tmono" x="590" y="46" text-anchor="middle">sums have shape (3,)  → seen as (1, 3)</text><rect class="cell" x="430" y="70" width="52" height="40"/><text class="tmono" x="456.0" y="94.5" text-anchor="middle">1</text><rect class="cell" x="482" y="70" width="52" height="40"/><text class="tmono" x="508.0" y="94.5" text-anchor="middle">3</text><rect class="cell" x="534" y="70" width="52" height="40"/><text class="tmono" x="560.0" y="94.5" text-anchor="middle">0</text><rect class="cell" x="430" y="110" width="52" height="40"/><text class="tmono" x="456.0" y="134.5" text-anchor="middle">3</text><rect class="cell" x="482" y="110" width="52" height="40"/><text class="tmono" x="508.0" y="134.5" text-anchor="middle">2</text><rect class="cell" x="534" y="110" width="52" height="40"/><text class="tmono" x="560.0" y="134.5" text-anchor="middle">4</text><rect class="cell" x="430" y="150" width="52" height="40"/><text class="tmono" x="456.0" y="174.5" text-anchor="middle">0</text><rect class="cell" x="482" y="150" width="52" height="40"/><text class="tmono" x="508.0" y="174.5" text-anchor="middle">4</text><rect class="cell" x="534" y="150" width="52" height="40"/><text class="tmono" x="560.0" y="174.5" text-anchor="middle">5</text><rect class="cell sum" x="430" y="224" width="52" height="40"/><text class="tmono" x="456.0" y="248.5" text-anchor="middle">4</text><rect class="cell sum" x="482" y="224" width="52" height="40"/><text class="tmono" x="508.0" y="248.5" text-anchor="middle">9</text><rect class="cell sum" x="534" y="224" width="52" height="40"/><text class="tmono" x="560.0" y="248.5" text-anchor="middle">9</text><line class="ln warn" x1="456.0" y1="220" x2="456.0" y2="196" marker-end="url(#arr)"/><line class="ln warn" x1="508.0" y1="220" x2="508.0" y2="196" marker-end="url(#arr)"/><line class="ln warn" x1="560.0" y1="220" x2="560.0" y2="196" marker-end="url(#arr)"/><text class="tm" x="636" y="250" text-anchor="start">the row is copied DOWNWARD</text><text class="tm" x="636" y="270" text-anchor="start">each COLUMN ÷ a sum</text><rect class="box warn" x="450" y="280" width="280" height="40" rx="10"/><text class="t" x="590" y="305" text-anchor="middle">row 0 = .25 + .33 + 0 = .58  ✗</text></svg><figcaption>Toy 3x3 counts. Without keepdim nothing crashes, but the wrong direction gets normalised.</figcaption></figure>
+<p>Drop <code>keepdim=True</code> and the totals have shape <span class="shape">(27)</span>. Aligned from the right that looks like <span class="shape">(1, 27)</span>, a <b>row</b>, which gets copied <b>downwards</b>. Now each <b>column</b> is divided by a total.</p>
+<ul>
+<li>No error, no warning. The code runs and the numbers look plausible.</li>
+<li>Test it: the first <b>row</b> no longer sums to 1. The first <b>column</b> does. So the columns were normalised, not the rows.</li>
+<li>It stayed quiet because in this table the row totals happen to equal the column totals.</li>
+</ul>
+<div class="callout gotcha"><b class="ctitle">How to avoid it</b><div>Always keep <code>keepdim=True</code> here, and always check that <code>P[0].sum()</code> equals 1.</div></div>
+<div class="oneline"><small>In one line</small>Without keepdim the division runs in the wrong direction, silently, so always verify the row sums.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c17" data-title="How good is the model?" data-num="18" data-track><header class="chead"><span class="num">18</span><h2>How good is the model?</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3028s" target="_blank" rel="noopener" title="Open the video at 50:28">&#9654; 50:28</a></header><div class="body">
+<p>Training is just counting and normalising: the numbers in P <b>are</b> the model's parameters. Now we want <b>one number</b> that says how good it is.</p>
+<p>First look at the probability it gives to each real pair in a few names:</p>
+<pre class="code" data-lang="python"><code>for ch1, ch2 in zip(chs, chs[1:]):
+    prob = P[stoi[ch1], stoi[ch2]]
+    print(f'{ch1}{ch2}: {prob:.4f}')</code></pre>
+<table class="t"><tr><th>pair in "emma"</th><th>.e</th><th>em</th><th>mm</th><th>ma</th><th>a.</th></tr>
+<tr><td>probability</td><td class="m">0.0478</td><td class="m">0.0377</td><td class="m">0.0253</td><td class="m">0.3899</td><td class="m">0.1960</td></tr></table>
+<ul>
+<li><b>Yardstick:</b> with 27 options and no knowledge, every pair would get about <b>4%</b>. Anything above 4% means we learned something. Some pairs reach about 40%.</li>
+<li>A perfect model would give the true next letter a probability near <b>1</b>.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Check the probability the model gave to the letter that really came next; 4% is the no-knowledge baseline.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c18" data-title="From likelihood to log-likelihood" data-num="19" data-track><header class="chead"><span class="num">19</span><h2>From likelihood to log-likelihood</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3182s" target="_blank" rel="noopener" title="Open the video at 53:02">&#9654; 53:02</a></header><div class="body">
+<p>In statistics the standard quality number is the <b>likelihood</b>: the <b>product</b> of all those probabilities, which equals the probability the model gives to the <b>whole dataset</b>. Higher is better.</p>
+<ul>
+<li>Every factor is between 0 and 1, so the product becomes a <b>tiny, unwieldy number</b>.</li>
+<li>So people use the <b>log</b>. It turns a product into a <b>sum</b>:</li>
+</ul>
+<div class="formula">log(a · b · c) = log a + log b + log c</div>
+<figure class="fig"><svg class="d" viewBox="0 0 740 262" role="img" aria-label="Graph of the natural log between 0 and 1"><line class="axis" x1="70" y1="40" x2="690" y2="40"/><line class="axis" x1="70" y1="36" x2="70" y2="44"/><text class="ts" x="70" y="28" text-anchor="middle">0</text><line class="axis" x1="225.0" y1="36" x2="225.0" y2="44"/><text class="ts" x="225.0" y="28" text-anchor="middle">0.25</text><line class="axis" x1="380.0" y1="36" x2="380.0" y2="44"/><text class="ts" x="380.0" y="28" text-anchor="middle">0.5</text><line class="axis" x1="535.0" y1="36" x2="535.0" y2="44"/><text class="ts" x="535.0" y="28" text-anchor="middle">0.75</text><line class="axis" x1="690" y1="36" x2="690" y2="44"/><text class="ts" x="690" y="28" text-anchor="middle">1</text><text class="tm" x="380.0" y="18" text-anchor="middle">probability p the model gave to the true next letter</text><text class="ts" x="58" y="44" text-anchor="end">0</text><text class="ts" x="58" y="89" text-anchor="end">-1</text><line class="grid" x1="70" y1="85" x2="690" y2="85"/><text class="ts" x="58" y="134" text-anchor="end">-2</text><line class="grid" x1="70" y1="130" x2="690" y2="130"/><text class="ts" x="58" y="179" text-anchor="end">-3</text><line class="grid" x1="70" y1="175" x2="690" y2="175"/><text class="ts" x="58" y="224" text-anchor="end">-4</text><line class="grid" x1="70" y1="220" x2="690" y2="220"/><polyline class="curve" points="81.5,219.5 84.2,209.8 87.0,201.8 89.8,195.1 92.5,189.2 95.3,184.0 98.1,179.3 100.8,175.1 103.6,171.2 106.4,167.6 109.1,164.3 111.9,161.3 114.7,158.4 117.4,155.7 120.2,153.1 123.0,150.7 125.7,148.4 128.5,146.2 131.3,144.2 134.0,142.2 136.8,140.3 139.6,138.4 142.3,136.7 145.1,135.0 147.9,133.4 150.6,131.8 153.4,130.3 156.2,128.8 158.9,127.4 161.7,126.0 164.5,124.7 167.2,123.4 170.0,122.1 172.7,120.9 175.5,119.7 178.3,118.5 181.0,117.4 183.8,116.3 186.6,115.2 189.3,114.1 192.1,113.1 194.9,112.1 197.6,111.1 200.4,110.2 203.2,109.2 205.9,108.3 208.7,107.4 211.5,106.5 214.2,105.6 217.0,104.8 219.8,103.9 222.5,103.1 225.3,102.3 228.1,101.5 230.8,100.7 233.6,100.0 236.4,99.2 239.1,98.5 241.9,97.7 244.7,97.0 247.4,96.3 250.2,95.6 253.0,94.9 255.7,94.2 258.5,93.6 261.3,92.9 264.0,92.3 266.8,91.6 269.6,91.0 272.3,90.4 275.1,89.8 277.9,89.2 280.6,88.6 283.4,88.0 286.2,87.4 288.9,86.8 291.7,86.3 294.5,85.7 297.2,85.2 300.0,84.6 302.8,84.1 305.5,83.6 308.3,83.0 311.1,82.5 313.8,82.0 316.6,81.5 319.3,81.0 322.1,80.5 324.9,80.0 327.6,79.5 330.4,79.0 333.2,78.6 335.9,78.1 338.7,77.6 341.5,77.2 344.2,76.7 347.0,76.3 349.8,75.8 352.5,75.4 355.3,74.9 358.1,74.5 360.8,74.1 363.6,73.6 366.4,73.2 369.1,72.8 371.9,72.4 374.7,72.0 377.4,71.6 380.2,71.2 383.0,70.8 385.7,70.4 388.5,70.0 391.3,69.6 394.0,69.2 396.8,68.8 399.6,68.4 402.3,68.1 405.1,67.7 407.9,67.3 410.6,67.0 413.4,66.6 416.2,66.2 418.9,65.9 421.7,65.5 424.5,65.2 427.2,64.8 430.0,64.5 432.8,64.1 435.5,63.8 438.3,63.4 441.1,63.1 443.8,62.8 446.6,62.4 449.4,62.1 452.1,61.8 454.9,61.5 457.7,61.1 460.4,60.8 463.2,60.5 466.0,60.2 468.7,59.9 471.5,59.6 474.2,59.2 477.0,58.9 479.8,58.6 482.5,58.3 485.3,58.0 488.1,57.7 490.8,57.4 493.6,57.1 496.4,56.8 499.1,56.6 501.9,56.3 504.7,56.0 507.4,55.7 510.2,55.4 513.0,55.1 515.7,54.8 518.5,54.6 521.3,54.3 524.0,54.0 526.8,53.7 529.6,53.5 532.3,53.2 535.1,52.9 537.9,52.7 540.6,52.4 543.4,52.1 546.2,51.9 548.9,51.6 551.7,51.4 554.5,51.1 557.2,50.8 560.0,50.6 562.8,50.3 565.5,50.1 568.3,49.8 571.1,49.6 573.8,49.3 576.6,49.1 579.4,48.8 582.1,48.6 584.9,48.4 587.7,48.1 590.4,47.9 593.2,47.6 596.0,47.4 598.7,47.2 601.5,46.9 604.3,46.7 607.0,46.5 609.8,46.2 612.6,46.0 615.3,45.8 618.1,45.5 620.8,45.3 623.6,45.1 626.4,44.9 629.1,44.6 631.9,44.4 634.7,44.2 637.4,44.0 640.2,43.8 643.0,43.5 645.7,43.3 648.5,43.1 651.3,42.9 654.0,42.7 656.8,42.5 659.6,42.3 662.3,42.1 665.1,41.8 667.9,41.6 670.6,41.4 673.4,41.2 676.2,41.0 678.9,40.8 681.7,40.6 684.5,40.4 687.2,40.2 690.0,40.0"/><circle class="pt" cx="690.0" cy="40.0" r="5"/><text class="tm" x="680" y="62.0" text-anchor="end">p = 1  →  log = 0  (perfect)</text><circle class="pt" cx="380.0" cy="71.2" r="5"/><text class="tm" x="390.0" y="95.19162312519754" text-anchor="start">p = 0.5  →  log ≈ −0.69</text><circle class="pt" cx="132.0" cy="143.6" r="5"/><text class="tm" x="144.0" y="163.61632918473205" text-anchor="start">p = 0.1  →  log ≈ −2.30</text><text class="tm" x="84" y="246" text-anchor="start">p → 0  →  log → −∞  (an 'impossible' pair)</text></svg><figcaption>Good predictions sit near 0; confidently wrong ones plunge towards minus infinity.</figcaption></figure>
+<p>Probability 1 gives log 0. As the probability falls towards 0, the log falls towards <b>minus infinity</b>.</p>
+<div class="oneline"><small>In one line</small>Log-likelihood is the sum of the logs of the probabilities, which is easy to accumulate and compare.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c19" data-title="Negative log-likelihood is the loss" data-num="20" data-track><header class="chead"><span class="num">20</span><h2>Negative log-likelihood is the loss</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3391s" target="_blank" rel="noopener" title="Open the video at 56:31">&#9654; 56:31</a></header><div class="body">
+<pre class="code" data-lang="python"><code>log_likelihood = 0.0
+n = 0
+for w in words:
+    chs = ['.'] + list(w) + ['.']
+    for ch1, ch2 in zip(chs, chs[1:]):
+        prob = P[stoi[ch1], stoi[ch2]]
+        log_likelihood += torch.log(prob)
+        n += 1
+nll = -log_likelihood
+print(nll / n)          # about 2.45</code></pre>
+<ul>
+<li>The best log-likelihood is <b>0</b> (all probabilities 1) and it gets more negative when worse. But a <b>loss</b> should mean "low is good", so flip the sign: <b>negative log-likelihood (NLL)</b>.</li>
+<li>NLL is <b>0</b> at best and bigger when the predictions are worse.</li>
+<li>Divide by the number of pairs to get the <b>average</b> NLL, a friendlier number.</li>
+</ul>
+<table class="t"><tr><th>data</th><th>total NLL</th><th>average</th></tr>
+<tr><td>first 3 names</td><td class="m">38.79</td><td></td></tr>
+<tr><td>all 32,033 names</td><td class="m">559,891.75</td><td class="m"><b>2.454</b></td></tr></table>
+<figure class="fig"><svg class="d" viewBox="0 0 760 190" role="img" aria-label="Loss scale from 0 to infinity"><line class="axis" x1="40" y1="110" x2="730" y2="110"/><line class="axis" x1="40" y1="105" x2="40" y2="115"/><text class="ts" x="40" y="132" text-anchor="middle">0</text><line class="axis" x1="205" y1="105" x2="205" y2="115"/><text class="ts" x="205" y="132" text-anchor="middle">1</text><line class="axis" x1="370" y1="105" x2="370" y2="115"/><text class="ts" x="370" y="132" text-anchor="middle">2</text><line class="axis" x1="535" y1="105" x2="535" y2="115"/><text class="ts" x="535" y="132" text-anchor="middle">3</text><line class="axis" x1="700" y1="105" x2="700" y2="115"/><text class="ts" x="700" y="132" text-anchor="middle">4</text><text class="tm" x="40" y="24" text-anchor="start">← better</text><text class="tm" x="730" y="24" text-anchor="end">worse →</text><circle class="pt acc" cx="40" cy="110" r="6"/><text class="t" x="40" y="70" text-anchor="middle">0</text><text class="ts" x="40" y="86" text-anchor="middle">perfect</text><circle class="pt acc" cx="445.075" cy="110" r="6"/><text class="t" x="445.075" y="70" text-anchor="middle">2.45</text><text class="ts" x="445.075" y="86" text-anchor="middle">counting &amp; neural net</text><circle class="pt warn" cx="583.8399999999999" cy="110" r="6"/><text class="t" x="583.8399999999999" y="160" text-anchor="middle">3.30</text><text class="ts" x="583.8399999999999" y="176" text-anchor="middle">uniform guess (ln 27)</text><circle class="pt warn" cx="662.05" cy="110" r="6"/><text class="t" x="662.05" y="70" text-anchor="middle">3.77</text><text class="ts" x="662.05" y="86" text-anchor="middle">random W on “emma”</text><line class="ln warn" x1="690" y1="110" x2="730" y2="110" marker-end="url(#arr)"/><text class="t" x="722" y="160" text-anchor="middle">∞</text><text class="ts" x="722" y="176" text-anchor="middle">a pair with probability 0</text></svg><figcaption>Where the numbers in the video sit. Lower is better; 0 is the minimum.</figcaption></figure>
+<div class="oneline"><small>In one line</small>Average negative log-likelihood is the loss: 0 is perfect, lower is better, and our bigram scores about 2.45.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c20" data-title="The goal in four equivalent lines" data-num="21" data-track><header class="chead"><span class="num">21</span><h2>The goal in four equivalent lines</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3515s" target="_blank" rel="noopener" title="Open the video at 58:35">&#9654; 58:35</a></header><div class="body">
+<p>He writes the goal as a chain of statements that all mean the same thing:</p>
+<ol>
+<li><b>Maximise the likelihood</b> of the data with respect to the model's parameters.</li>
+<li>= maximise the <b>log-likelihood</b> (log never changes which option is best, it just rescales).</li>
+<li>= minimise the <b>negative log-likelihood</b>.</li>
+<li>= minimise the <b>average</b> negative log-likelihood.</li>
+</ol>
+<p>The model's <b>parameters</b> here are simply the numbers in the table P. In Part 2 they will come from a neural network instead.</p>
+<div class="oneline"><small>In one line</small>Maximising likelihood, maximising log-likelihood and minimising average NLL are the same job.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c21" data-title="A probability of 0 means infinite loss" data-num="22" data-track><header class="chead"><span class="num">22</span><h2>A probability of 0 means infinite loss</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3628s" target="_blank" rel="noopener" title="Open the video at 1:00:28">&#9654; 1:00:28</a></header><div class="body">
+<p>Test a made-up name, <b>andrejq</b>:</p>
+<table class="t"><tr><th>pair</th><th>.a</th><th>an</th><th>nd</th><th>dr</th><th>re</th><th>ej</th><th>jq</th><th>q.</th></tr>
+<tr><td>probability</td><td class="m">0.1377</td><td class="m">0.1605</td><td class="m">0.0384</td><td class="m">0.0771</td><td class="m">0.1336</td><td class="m">0.0027</td><td class="m"><b>0.0000</b></td><td class="m">0.1029</td></tr></table>
+<ul>
+<li>"jq" never appears in the data, so its count, and its probability, is <b>0</b>.</li>
+<li>log(0) = minus infinity, so the loss becomes <b>infinite</b>.</li>
+</ul>
+<p>That is "gross": a plausible-ish name is declared completely impossible.</p>
+<div class="oneline"><small>In one line</small>One pair with zero probability makes the whole loss infinite.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c22" data-title="Model smoothing with fake counts" data-num="23" data-track><header class="chead"><span class="num">23</span><h2>Model smoothing with fake counts</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3689s" target="_blank" rel="noopener" title="Open the video at 1:01:29">&#9654; 1:01:29</a></header><div class="body">
+<p>Fix: pretend we saw every pair a few extra times.</p>
+<pre class="code" data-lang="python"><code>P = (N + 1).float()             # add one fake count to every cell
+P /= P.sum(1, keepdim=True)</code></pre>
+<ul>
+<li>No zeros are left, so nothing is infinitely unlikely. "jq" now gets a very small, but non-zero, probability.</li>
+<li>More fake counts gives a <b>smoother, more uniform</b> model. Fewer gives a more <b>peaked</b> one. +1 is a decent choice.</li>
+<li>The loss barely moves: 2.4540 → <b>2.4546</b> (still ≈ 2.45), a tiny price.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Adding +1 to every count removes zeros, so no pair is impossible.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c23" data-title="Part 1 test: can you explain it?" data-num="T1" data-track><header class="chead"><span class="num">T1</span><h2>Part 1 test: can you explain it?</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3775s" target="_blank" rel="noopener" title="Open the video at 1:02:55">&#9654; 1:02:55</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>What does a bigram model look at to predict the next letter?</span></summary><div class="ans">Only the <b>previous</b> letter.</div></details><details class="q"><summary><span>Why does the table use one '.' token, and what do row 0 and column 0 mean?</span></summary><div class="ans">One token can mark both start and end. <b>Row 0</b> = how often each letter starts a name. <b>Column 0</b> = how often each letter ends one.</div></details><details class="q"><summary><span>What do the rows and columns of the 27 x 27 table mean?</span></summary><div class="ans">Row = the <b>previous</b> letter, column = the <b>next</b> letter, value = how often that pair occurs.</div></details><details class="q"><summary><span>What does torch.multinomial do, and what must you set to draw many samples?</span></summary><div class="ans">It draws integers according to a probability vector. Set <code>replacement=True</code>, and pass a seeded generator to make it repeatable.</div></details><details class="q"><summary><span>Why does P / P.sum(1) give a wrong answer without any error, and what is the fix?</span></summary><div class="ans">The (27,) result is treated as a (1, 27) row and copied downwards, so <b>columns</b> get normalised instead of rows. Use <code>keepdim=True</code> and check <code>P[0].sum() == 1</code>.</div></details><details class="q"><summary><span>Define likelihood, log-likelihood and negative log-likelihood. Why average it?</span></summary><div class="ans">Likelihood = product of the probabilities of the data. Log-likelihood = sum of their logs. NLL = minus that, so low is good. Averaging gives a number independent of the dataset size.</div></details><details class="q"><summary><span>Why does 'andrejq' get infinite loss, and how does smoothing help?</span></summary><div class="ans">'jq' has probability 0 and log 0 = minus infinity. Adding fake counts (+1) gives every pair a small non-zero probability.</div></details><details class="q"><summary><span>What loss did counting reach, and what would a uniform guesser get?</span></summary><div class="ans">About <b>2.45</b>. A uniform guesser gives each letter 1/27, which is a loss of ln 27 ≈ <b>3.30</b> (my own arithmetic).</div></details><div class="oneline"><small>In one line</small>If you can answer these, Part 1 is done.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p2" data-short="Part 2 · Neural net"><div class="kicker">Part 2 · 1:03:51 – 1:57:45</div><h2>Way 2: the neural-net model</h2><p>Same task and same loss, but now the probabilities come out of a neural network whose weights are tuned by gradient descent.</p></section><section class="concept" id="c24" data-title="Same task, neural-net style" data-num="24" data-track><header class="chead"><span class="num">24</span><h2>Same task, neural-net style</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3831s" target="_blank" rel="noopener" title="Open the video at 1:03:51">&#9654; 1:03:51</a></header><div class="body">
+<p>The counting model works, but we reached it by doing something that "felt sensible". Now we re-cast the problem the way neural nets do it:</p>
+<ul>
+<li>The net gets <b>one character</b> as input and has weights <b>W</b>.</li>
+<li>It outputs a <b>probability distribution</b> over the next character.</li>
+<li>We know the <b>true next character</b> (the label), so we can read off how much probability the net gave it. High probability = <b>low loss</b>.</li>
+<li>Then we use <b>gradient-based optimisation</b> to tune W so the loss goes down.</li>
+</ul>
+<p>Same bigram model, same loss, a very different route.</p>
+<div class="oneline"><small>In one line</small>A neural net outputs next-letter probabilities from W, and we tune W to lower the same NLL loss.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c25" data-title="Build the training set (x, y)" data-num="25" data-track><header class="chead"><span class="num">25</span><h2>Build the training set (x, y)</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3926s" target="_blank" rel="noopener" title="Open the video at 1:05:26">&#9654; 1:05:26</a></header><div class="body">
+<p>Loop over the names as before, but instead of counting, <b>store</b> each pair: <b>x</b> = the first letter's number (input), <b>y</b> = the second's (label).</p>
+<pre class="code" data-lang="python"><code>xs, ys = [], []
+for w in words:
+    chs = ['.'] + list(w) + ['.']
+    for ch1, ch2 in zip(chs, chs[1:]):
+        xs.append(stoi[ch1])
+        ys.append(stoi[ch2])
+xs = torch.tensor(xs)
+ys = torch.tensor(ys)</code></pre>
+<p>For the single name <b>emma</b> there are 5 examples:</p>
+<table class="t"><tr><th>pair</th><th>.e</th><th>em</th><th>mm</th><th>ma</th><th>a.</th></tr>
+<tr><td>x (input)</td><td class="m">0</td><td class="m">5</td><td class="m">13</td><td class="m">13</td><td class="m">1</td></tr>
+<tr><td>y (label)</td><td class="m">5</td><td class="m">13</td><td class="m">13</td><td class="m">1</td><td class="m">0</td></tr></table>
+<div class="callout gotcha"><b class="ctitle">Tangent he warns about: torch.Tensor vs torch.tensor</b><div>The <b>capital T</b> <code>torch.Tensor</code> always gives <b>float32</b>. The <b>lowercase</b> <code>torch.tensor</code> infers the type, so integers stay integers. The docs are unclear about this, so he suggests sticking to <b>lowercase</b> and getting used to reading threads and docs.</div></div>
+<div class="oneline"><small>In one line</small>xs holds the input letter numbers and ys the correct next-letter numbers, one pair per example.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c26" data-title="One-hot encoding" data-num="26" data-track><header class="chead"><span class="num">26</span><h2>One-hot encoding</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=4241s" target="_blank" rel="noopener" title="Open the video at 1:10:41">&#9654; 1:10:41</a></header><div class="body">
+<p>We cannot feed the integer 13 into a neuron: neurons <b>multiply inputs by weights</b>, and "13" is a label, not a quantity. Instead use a <b>one-hot vector</b>: all zeros, with a single 1 at the integer's position.</p>
+<pre class="code" data-lang="python"><code>import torch.nn.functional as F
+xenc = F.one_hot(xs, num_classes=27).float()
+xenc.shape          # (5, 27)</code></pre>
+<ul>
+<li>Each row is one example, with exactly one cell switched on (columns 0, 5, 13, 13 and 1 for "emma").</li>
+<li>Pass <code>num_classes=27</code> so it does not guess a smaller size.</li>
+<li><code>one_hot</code> returns <b>int64</b> and cannot be asked for floats, so cast with <code>.float()</code>. Neural nets want floats.</li>
+</ul>
+<div class="oneline"><small>In one line</small>One-hot turns a letter number into a 27-long vector with a single 1, ready for a neuron.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c27" data-title="One neuron, then 27 neurons" data-num="27" data-track><header class="chead"><span class="num">27</span><h2>One neuron, then 27 neurons</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=4417s" target="_blank" rel="noopener" title="Open the video at 1:13:37">&#9654; 1:13:37</a></header><div class="body">
+<p>A neuron computes <b>w · x</b> (no bias here). Weights start as random numbers from a <b>normal distribution</b>: mostly near 0, rarely beyond ±3.</p>
+<pre class="code" data-lang="python"><code>W = torch.randn((27, 1))
+xenc @ W            # (5,27) @ (27,1) -&gt; (5,1)   one number per example</code></pre>
+<p><code>@</code> is <b>matrix multiplication</b>: all 5 examples run through the neuron <b>in parallel</b>. Now use <b>27 neurons</b> instead of 1:</p>
+<pre class="code" data-lang="python"><code>W = torch.randn((27, 27))
+xenc @ W            # (5,27) @ (27,27) -&gt; (5,27)</code></pre>
+<ul>
+<li>Entry <code>[3, 13]</code> = how strongly <b>neuron 13</b> fires on <b>example 3</b> = the dot product of row 3 of xenc with column 13 of W.</li>
+<li>It is a <b>single linear layer</b>: no bias, no tanh, no other layers. "The dumbest, smallest, simplest neural net."</li>
+</ul>
+<div class="oneline"><small>In one line</small>xenc @ W runs every example through all 27 neurons at once, giving a (5, 27) table of outputs.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c28" data-title="The outputs are logits (log-counts)" data-num="28" data-track><header class="chead"><span class="num">28</span><h2>The outputs are logits (log-counts)</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=4756s" target="_blank" rel="noopener" title="Open the video at 1:19:16">&#9654; 1:19:16</a></header><div class="body">
+<p>We want probabilities, which must be <b>positive</b> and <b>sum to 1</b>. The raw outputs are positive and negative, so that does not work directly. And they cannot be counts, which are positive integers.</p>
+<p>The trick: <b>read the outputs as log-counts</b>, also called <b>logits</b>. Then undo the log with <code>exp</code>:</p>
+<pre class="code" data-lang="python"><code>logits = xenc @ W          # interpreted as log-counts
+counts = logits.exp()      # now positive "counts", like the N table</code></pre>
+<ul>
+<li>A <b>negative</b> logit becomes a number between 0 and 1.</li>
+<li>A <b>positive</b> logit becomes a number above 1, growing quickly.</li>
+<li>So <code>counts</code> are always positive, just like the counting table N.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Treat the layer's outputs as log-counts, and exp() turns them into positive pseudo-counts.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c29" data-title="Softmax" data-num="29" data-track><header class="chead"><span class="num">29</span><h2>Softmax</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=5001s" target="_blank" rel="noopener" title="Open the video at 1:23:21">&#9654; 1:23:21</a></header><div class="body">
+<p>Counts to probabilities is what we did before: divide each row by its total.</p>
+<pre class="code" data-lang="python"><code>probs = counts / counts.sum(1, keepdims=True)    # each row sums to 1</code></pre>
+<p>These two steps, <b>exp</b> then <b>normalise</b>, have a name: <b>softmax</b>.</p>
+<div class="formula"><i>p<sub>i</sub></i> = <span class="frac"><span><i>e</i><sup><i>z<sub>i</sub></i></sup></span><span>Σ<sub><i>j</i></sub> <i>e</i><sup><i>z<sub>j</sub></i></sup></span></span></div>
+<ul>
+<li>It takes any real numbers and outputs <b>positive numbers that sum to 1</b>.</li>
+<li>You can put it on top of any layer to make a network output a probability distribution.</li>
+<li>Every step so far (multiply, add, exp, sum, divide) is <b>differentiable</b>, so we can back-propagate through all of it.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Softmax = exp, then divide by the row total, and it is differentiable end to end.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c30" data-title="The full forward pass" data-num="30" data-track><header class="chead"><span class="num">30</span><h2>The full forward pass</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=5173s" target="_blank" rel="noopener" title="Open the video at 1:26:13">&#9654; 1:26:13</a></header><div class="body">
+<pre class="code" data-lang="python"><code>g = torch.Generator().manual_seed(2147483647)
+W = torch.randn((27, 27), generator=g, requires_grad=True)
+
+xenc   = F.one_hot(xs, num_classes=27).float()    # (5, 27)
+logits = xenc @ W                                  # (5, 27)  log-counts
+counts = logits.exp()                              # (5, 27)
+probs  = counts / counts.sum(1, keepdims=True)     # (5, 27)  softmax done</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 780 250" role="img" aria-label="Forward pass of the one-layer net with shapes"><rect class="box" x="10" y="20" width="158" height="64" rx="10"/><text class="t" x="89.0" y="48.5" text-anchor="middle">xs</text><text class="tm" x="89.0" y="64.5" text-anchor="middle">(5,)  integers</text><line class="ln" x1="168" y1="52" x2="205" y2="52" marker-end="url(#arr)"/><rect class="box" x="205" y="20" width="158" height="64" rx="10"/><text class="t" x="284.0" y="48.5" text-anchor="middle">one_hot → xenc</text><text class="tm" x="284.0" y="64.5" text-anchor="middle">(5, 27)  floats</text><line class="ln" x1="363" y1="52" x2="400" y2="52" marker-end="url(#arr)"/><rect class="box info" x="400" y="20" width="158" height="64" rx="10"/><text class="t" x="479.0" y="48.5" text-anchor="middle">xenc @ W</text><text class="tm" x="479.0" y="64.5" text-anchor="middle">logits  (5, 27)</text><line class="ln" x1="558" y1="52" x2="595" y2="52" marker-end="url(#arr)"/><rect class="box" x="595" y="20" width="158" height="64" rx="10"/><text class="t" x="674.0" y="48.5" text-anchor="middle">logits.exp()</text><text class="tm" x="674.0" y="64.5" text-anchor="middle">counts  (5, 27)</text><path class="ln" d="M674 86 C674 112 88 100 88 130" marker-end="url(#arr)"/><rect class="box" x="10" y="134" width="158" height="64" rx="10"/><text class="t" x="89.0" y="162.5" text-anchor="middle">÷ row sums</text><text class="tm" x="89.0" y="178.5" text-anchor="middle">probs  (5, 27)</text><line class="ln" x1="168" y1="166" x2="205" y2="166" marker-end="url(#arr)"/><rect class="box" x="205" y="134" width="158" height="64" rx="10"/><text class="t" x="284.0" y="162.5" text-anchor="middle">probs[arange, ys]</text><text class="tm" x="284.0" y="178.5" text-anchor="middle">(5,)  prob of the truth</text><line class="ln" x1="363" y1="166" x2="400" y2="166" marker-end="url(#arr)"/><rect class="box acc" x="400" y="134" width="158" height="64" rx="10"/><text class="t" x="479.0" y="162.5" text-anchor="middle">−log, then mean</text><text class="tm" x="479.0" y="178.5" text-anchor="middle">loss  (one number)</text><rect class="box warn" x="595" y="134" width="160" height="64" rx="10"/><text class="t" x="675" y="156" text-anchor="middle">exp  +  ÷ row sums</text><text class="tm" x="675" y="174" text-anchor="middle">together are called</text><text class="t" x="675" y="191" text-anchor="middle">SOFTMAX</text><text class="tm" x="380" y="236" text-anchor="middle">every step is differentiable, so gradients can flow all the way back to W</text></svg><figcaption>Shapes shown for the five bigrams of “emma”. Replace 5 by 228,146 for the whole dataset.</figcaption></figure>
+<p>Row i of <code>probs</code> is the net's guess for the letter after example i. For input 0 ('.') that is 27 numbers: how likely each letter is to start a name.</p>
+<div class="oneline"><small>In one line</small>Forward pass: one-hot, matrix multiply, exp, normalise, giving a probability row per example.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c31" data-title="Reading the loss for 'emma'" data-num="31" data-track><header class="chead"><span class="num">31</span><h2>Reading the loss for 'emma'</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=5323s" target="_blank" rel="noopener" title="Open the video at 1:28:43">&#9654; 1:28:43</a></header><div class="body">
+<p>Take each example's row and look at the probability given to the <b>true</b> next letter (the label):</p>
+<table class="t"><tr><th>example</th><th>label</th><th>prob given</th><th>NLL</th></tr>
+<tr><td class="m">. → e</td><td class="m">5</td><td class="m">0.0123</td><td class="m">4.40</td></tr>
+<tr><td class="m">e → m</td><td class="m">13</td><td class="m">0.0181</td><td class="m">4.01</td></tr>
+<tr><td class="m">m → m</td><td class="m">13</td><td class="m">0.0267</td><td class="m">3.62</td></tr>
+<tr class="hl"><td class="m">m → a</td><td class="m">1</td><td class="m">0.0737</td><td class="m">2.61</td></tr>
+<tr><td class="m">a → .</td><td class="m">0</td><td class="m">0.0150</td><td class="m">4.20</td></tr></table>
+<ul>
+<li>The net thinks the true next letter is only about 1% likely: <b>bad</b>, but expected, because W is <b>random</b>.</li>
+<li>"m → a" got 7% just by luck, so its NLL is lower.</li>
+<li>Average NLL = <b>3.77</b>, a high loss. This is not a good W.</li>
+</ul>
+<div class="oneline"><small>In one line</small>A random W gives the true letters only about 1% probability, so the loss starts high at 3.77.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c32" data-title="Guess-and-check vs gradients" data-num="32" data-track><header class="chead"><span class="num">32</span><h2>Guess-and-check vs gradients</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=5492s" target="_blank" rel="noopener" title="Open the video at 1:31:32">&#9654; 1:31:32</a></header><div class="body">
+<p>He tries re-rolling W with a different seed: the loss becomes <b>3.37</b>, then worse values for other seeds. Randomly assigning parameters and checking is, in his words, <b>"amateur hour"</b>.</p>
+<p>The right way: start from one random W and <b>commit</b> to it. The loss is built only from <b>differentiable</b> steps, so we can compute the <b>gradient of the loss with respect to W</b> and nudge W downhill.</p>
+<ul>
+<li>It is the same recipe as <b>micrograd</b>: forward pass, backward pass, update. He shows the old micrograd notebook next to the new one.</li>
+<li>Two differences: the net is just <b>one linear layer plus softmax</b>, and the loss is <b>negative log-likelihood</b> (for classification) instead of mean squared error (for regression).</li>
+</ul>
+<div class="oneline"><small>In one line</small>Don't re-roll weights randomly; follow the gradient of the loss to improve W.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c33" data-title="The loss in one line" data-num="33" data-track><header class="chead"><span class="num">33</span><h2>The loss in one line</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=5759s" target="_blank" rel="noopener" title="Open the video at 1:35:59">&#9654; 1:35:59</a></header><div class="body">
+<p>We need, for each example i, the probability in <b>column ys[i]</b> of <b>row i</b>. Fancy indexing does it all at once:</p>
+<pre class="code" data-lang="python"><code>probs[torch.arange(5), ys]      # row numbers 0..4, column numbers = the labels
+# tensor([0.0123, 0.0181, 0.0267, 0.0737, 0.0150])
+
+loss = -probs[torch.arange(5), ys].log().mean()      # 3.7693</code></pre>
+<ul>
+<li><code>torch.arange(5)</code> is 0, 1, 2, 3, 4: the row numbers.</li>
+<li>Take the log, average, and negate: exactly the loss from the loop version, now <b>vectorised</b>.</li>
+</ul>
+<div class="oneline"><small>In one line</small>probs[arange, ys].log().mean() with a minus sign is the NLL for every example in one line.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c34" data-title="The backward pass" data-num="34" data-track><header class="chead"><span class="num">34</span><h2>The backward pass</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=5906s" target="_blank" rel="noopener" title="Open the video at 1:38:26">&#9654; 1:38:26</a></header><div class="body">
+<pre class="code" data-lang="python"><code>W = torch.randn((27, 27), generator=g, requires_grad=True)   # track gradients for W
+
+W.grad = None            # reset (None works like zero, and is more efficient)
+loss.backward()          # fills W.grad
+W.grad.shape             # (27, 27), same as W</code></pre>
+<ul>
+<li><code>requires_grad=True</code> tells PyTorch to record how W was used. It is off by default.</li>
+<li>While the forward pass runs, PyTorch quietly builds a <b>computational graph</b>, like in micrograd. <code>backward()</code> walks it in reverse.</li>
+<li>Each entry of <code>W.grad</code> says how much that weight influences the loss. A <b>positive</b> gradient means increasing that weight would <b>raise</b> the loss.</li>
+<li>For "emma" most rows of W.grad are zeros: only the rows of letters that appeared as input receive gradient.</li>
+</ul>
+<div class="oneline"><small>In one line</small>loss.backward() fills W.grad with how each weight affects the loss.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c35" data-title="The update step" data-num="35" data-track><header class="chead"><span class="num">35</span><h2>The update step</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=6075s" target="_blank" rel="noopener" title="Open the video at 1:41:15">&#9654; 1:41:15</a></header><div class="body">
+<p>Move every weight a little in the <b>opposite direction</b> of its gradient:</p>
+<pre class="code" data-lang="python"><code>W.data += -0.1 * W.grad</code></pre>
+<p>Re-run the forward pass and the loss is lower: <b>3.769 → 3.749 → 3.729</b> and so on, each round a bit better.</p>
+<figure class="fig"><svg class="d" viewBox="0 0 780 170" role="img" aria-label="Gradient descent loop"><rect class="box" x="10" y="20" width="168" height="70" rx="10"/><text class="t" x="94.0" y="51.5" text-anchor="middle">1  Forward</text><text class="tm" x="94.0" y="67.5" text-anchor="middle">probs → loss</text><line class="ln" x1="178" y1="55" x2="202" y2="55" marker-end="url(#arr)"/><rect class="box" x="202" y="20" width="168" height="70" rx="10"/><text class="t" x="286.0" y="51.5" text-anchor="middle">2  Reset gradient</text><text class="tm" x="286.0" y="67.5" text-anchor="middle">W.grad = None</text><line class="ln" x1="370" y1="55" x2="394" y2="55" marker-end="url(#arr)"/><rect class="box" x="394" y="20" width="168" height="70" rx="10"/><text class="t" x="478.0" y="51.5" text-anchor="middle">3  Backward</text><text class="tm" x="478.0" y="67.5" text-anchor="middle">loss.backward()</text><line class="ln" x1="562" y1="55" x2="586" y2="55" marker-end="url(#arr)"/><rect class="box acc" x="586" y="20" width="168" height="70" rx="10"/><text class="t" x="670.0" y="51.5" text-anchor="middle">4  Update</text><text class="tm" x="670.0" y="67.5" text-anchor="middle">W.data += −lr · W.grad</text><path class="ln acc" d="M670 92 C670 150 94 150 94 94" marker-end="url(#arr)"/><text class="t" x="382" y="150" text-anchor="middle">repeat until the loss stops going down</text></svg><figcaption>The same four beats as in micrograd, now applied to the 27x27 matrix W.</figcaption></figure>
+<p>No loop over parameters is needed because there is only one parameter tensor, W.</p>
+<div class="oneline"><small>In one line</small>Forward, reset, backward, update: repeat, and the loss keeps dropping.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c36" data-title="Train on all the names" data-num="36" data-track><header class="chead"><span class="num">36</span><h2>Train on all the names</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=6162s" target="_blank" rel="noopener" title="Open the video at 1:42:42">&#9654; 1:42:42</a></header><div class="body">
+<pre class="code" data-lang="python"><code>for k in range(100):
+    xenc   = F.one_hot(xs, num_classes=27).float()
+    logits = xenc @ W
+    counts = logits.exp()
+    probs  = counts / counts.sum(1, keepdims=True)
+    loss   = -probs[torch.arange(num), ys].log().mean()
+    W.grad = None
+    loss.backward()
+    W.data += -50 * W.grad</code></pre>
+<ul>
+<li>Change nothing but the data: now <b>228,146</b> examples. The code "doesn't care" whether there are 5 or 228,146.</li>
+<li><b>Learning rate:</b> 0.1 crawls (3.76 to only 3.75 after 10 steps on the full data). <b>50</b> works: 3.76 → 2.69 in 10 steps. That is huge, but this problem is very simple.</li>
+<li>After a few hundred steps the loss settles around <b>2.46</b>.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Run the same loop on all 228,146 pairs with a big learning rate and the loss falls to about 2.46.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c37" data-title="Counting vs gradients: the same answer" data-num="37" data-track><header class="chead"><span class="num">37</span><h2>Counting vs gradients: the same answer</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=6286s" target="_blank" rel="noopener" title="Open the video at 1:44:46">&#9654; 1:44:46</a></header><div class="body">
+<table class="t"><tr><th>method</th><th>loss</th></tr>
+<tr><td>counting (no smoothing)</td><td class="m">≈ 2.45</td></tr>
+<tr><td>counting (+1 smoothing)</td><td class="m">≈ 2.45 (2.4546 vs 2.4540)</td></tr>
+<tr class="hl"><td>neural net (gradient descent)</td><td class="m">≈ 2.46</td></tr></table>
+<ul>
+<li>It makes sense: we feed in <b>no extra information</b>. Both only look at the previous letter.</li>
+<li>For a bigram the table is so tiny that we could count the answer directly. Gradient descent <b>finds the same thing</b> by following the loss.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Same information in, same loss out: gradient descent rediscovers what counting computes.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c38" data-title="Why use the neural net at all?" data-num="38" data-track><header class="chead"><span class="num">38</span><h2>Why use the neural net at all?</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=6339s" target="_blank" rel="noopener" title="Open the video at 1:45:39">&#9654; 1:45:39</a></header><div class="body">
+<p>If counting works, why bother? Because the gradient route is <b>far more flexible</b>:</p>
+<ul>
+<li>Soon we feed in <b>several previous letters</b> and use deeper networks.</li>
+<li>A table cannot follow: with k letters of context it needs 27<sup>k</sup> rows. With 10 letters that is roughly 2 x 10<sup>14</sup> rows (my arithmetic), so counting is <b>unscalable</b>.</li>
+<li>Whatever network we build, the output is always <b>logits</b>, then <b>softmax</b>, then <b>NLL loss</b>, then <b>gradient descent</b>.</li>
+</ul>
+<div class="callout remember"><b class="ctitle">The big promise</b><div>Going all the way up to transformers, none of this changes. Only the <b>forward pass</b> (how logits are computed from earlier characters) gets more complex.</div></div>
+<div class="oneline"><small>In one line</small>The neural-net recipe stays the same as the model grows; only the forward pass changes.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c39" data-title="Insight 1: one-hot @ W is a row lookup" data-num="39" data-track><header class="chead"><span class="num">39</span><h2>Insight 1: one-hot @ W is a row lookup</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=6447s" target="_blank" rel="noopener" title="Open the video at 1:47:27">&#9654; 1:47:27</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 760 260" role="img" aria-label="One-hot vector times matrix selects a row"><text class="t" x="140" y="40" text-anchor="middle">one_hot(5)</text><rect class="cell" x="20" y="70" width="30" height="34"/><text class="tmono" x="35.0" y="92" text-anchor="middle">0</text><rect class="cell" x="50" y="70" width="30" height="34"/><text class="tmono" x="65.0" y="92" text-anchor="middle">0</text><rect class="cell" x="80" y="70" width="30" height="34"/><text class="tmono" x="95.0" y="92" text-anchor="middle">0</text><rect class="cell" x="110" y="70" width="30" height="34"/><text class="tmono" x="125.0" y="92" text-anchor="middle">0</text><rect class="cell" x="140" y="70" width="30" height="34"/><text class="tmono" x="155.0" y="92" text-anchor="middle">0</text><rect class="cell hl" x="170" y="70" width="30" height="34"/><text class="tmono" x="185.0" y="92" text-anchor="middle">1</text><rect class="cell" x="200" y="70" width="30" height="34"/><text class="tmono" x="215.0" y="92" text-anchor="middle">0</text><rect class="cell" x="230" y="70" width="30" height="34"/><text class="tmono" x="245.0" y="92" text-anchor="middle">0</text><text class="t" x="274" y="92" text-anchor="middle">…</text><text class="big" x="328" y="94" text-anchor="middle">@</text><text class="t" x="500" y="28" text-anchor="middle">W  (27 x 27)</text><rect class="cell" x="410" y="40" width="180" height="22"/><text class="ts" x="402" y="56" text-anchor="end">row 0</text><rect class="cell" x="410" y="64" width="180" height="22"/><text class="ts" x="402" y="80" text-anchor="end">row 1</text><rect class="cell" x="410" y="88" width="180" height="22"/><text class="ts" x="402" y="104" text-anchor="end">row 2</text><rect class="cell" x="410" y="112" width="180" height="22"/><text class="ts" x="402" y="128" text-anchor="end">row 3</text><rect class="cell" x="410" y="136" width="180" height="22"/><text class="ts" x="402" y="152" text-anchor="end">row 4</text><rect class="cell hl" x="410" y="160" width="180" height="22"/><text class="ts" x="402" y="176" text-anchor="end">row 5</text><text class="tmono" x="500" y="176" text-anchor="middle">0.2   −1.3   0.8   0.5 …</text><rect class="cell" x="410" y="184" width="180" height="22"/><text class="ts" x="402" y="200" text-anchor="end">row 6</text><rect class="cell" x="410" y="208" width="180" height="22"/><text class="ts" x="402" y="224" text-anchor="end">row 7</text><text class="t" x="500" y="248" text-anchor="middle">…</text><text class="big" x="612" y="94" text-anchor="middle">=</text><rect class="cell hl" x="632" y="70" width="120" height="34" rx="10"/><text class="t" x="692" y="92" text-anchor="middle">row 5 of W</text><text class="ts" x="692" y="126" text-anchor="middle">(example numbers)</text></svg><figcaption>A one-hot vector multiplied by W simply plucks out one row of W: a table lookup in disguise.</figcaption></figure>
+<p>Multiplying a one-hot vector by W <b>plucks out one row</b> of W. So the logits for letter 5 are literally row 5 of W.</p>
+<p>That is exactly what the counting model did: the first letter indexed a <b>row</b> of the table. So:</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 250" role="img" aria-label="Counting and the neural net reach the same table"><text class="lane" x="10" y="22" text-anchor="start">COUNTING</text><rect class="box" x="10" y="36" width="180" height="60" rx="10"/><text class="t" x="100.0" y="62.5" text-anchor="middle">N  (counts)</text><text class="tm" x="100.0" y="78.5" text-anchor="middle">integers, filled by counting</text><line class="ln" x1="190" y1="66" x2="292" y2="66" marker-end="url(#arr)"/><rect class="box" x="292" y="36" width="150" height="60" rx="10"/><text class="t" x="367.0" y="62.5" text-anchor="middle">÷ row sums</text><text class="tm" x="367.0" y="78.5" text-anchor="middle"></text><line class="ln" x1="442" y1="66" x2="560" y2="66" marker-end="url(#arr)"/><text class="lane" x="10" y="150" text-anchor="start">NEURAL NET</text><rect class="box info" x="10" y="164" width="180" height="60" rx="10"/><text class="t" x="100.0" y="190.5" text-anchor="middle">W  (log-counts)</text><text class="tm" x="100.0" y="206.5" text-anchor="middle">starts random, then learned</text><line class="ln" x1="190" y1="194" x2="222" y2="194" marker-end="url(#arr)"/><rect class="box" x="222" y="164" width="90" height="60" rx="10"/><text class="t" x="267.0" y="190.5" text-anchor="middle">exp()</text><text class="tm" x="267.0" y="206.5" text-anchor="middle"></text><line class="ln" x1="312" y1="194" x2="342" y2="194" marker-end="url(#arr)"/><rect class="box" x="342" y="164" width="100" height="60" rx="10"/><text class="t" x="392.0" y="190.5" text-anchor="middle">÷ row sums</text><text class="tm" x="392.0" y="206.5" text-anchor="middle"></text><line class="ln" x1="442" y1="194" x2="560" y2="194" marker-end="url(#arr)"/><rect class="box acc" x="560" y="100" width="170" height="64" rx="10"/><text class="t" x="645.0" y="128.5" text-anchor="middle">P</text><text class="tm" x="645.0" y="144.5" text-anchor="middle">next-letter probabilities</text><path class="ln" d="M442 66 L500 66 L500 120 L560 126" marker-end="url(#arr)"/><path class="ln" d="M442 194 L500 194 L500 144 L560 140" marker-end="url(#arr)"/><line class="dash" x1="100" y1="96" x2="100" y2="164"/><text class="t" x="112" y="134" text-anchor="start">W.exp() ≈ N</text></svg><figcaption>Gradient descent finds, step by step, the table that counting computes directly.</figcaption></figure>
+<ul>
+<li>W holds <b>log-counts</b>, so <code>W.exp()</code> plays the role of the count table N.</li>
+<li>Counting fills the table in <b>directly</b>. The net starts it random and arrives at (about) the same table by <b>following the loss</b>, piece by piece.</li>
+</ul>
+<div class="oneline"><small>In one line</small>W is the log of the counts table: one-hot times W just looks up a row.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c40" data-title="Insight 2: smoothing is regularization" data-num="40" data-track><header class="chead"><span class="num">40</span><h2>Insight 2: smoothing is regularization</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=6631s" target="_blank" rel="noopener" title="Open the video at 1:50:31">&#9654; 1:50:31</a></header><div class="body">
+<p>Remember smoothing: more fake counts made rows <b>more uniform</b>. The neural net has an equivalent.</p>
+<ul>
+<li>If <b>W = 0</b>, then logits are all 0, <code>exp</code> gives all 1s, and the probabilities are exactly <b>uniform</b>.</li>
+<li>So <b>encouraging W to stay near zero</b> smooths the model, just like fake counts do.</li>
+<li>Doing that by adding a term to the loss is called <b>regularization</b>.</li>
+</ul>
+<figure class="fig"><svg class="d" viewBox="0 0 760 222" role="img" aria-label="Tug of war between data and regularization"><line class="axis" x1="60" y1="110" x2="700" y2="110"/><circle class="ball" cx="380" cy="110" r="22"/><text class="t" x="380" y="115" text-anchor="middle">W</text><line class="ln warn" x1="350" y1="110" x2="130" y2="110" marker-end="url(#arr)"/><text class="t" x="215" y="80" text-anchor="middle">penalty  0.01 · mean(W²)</text><text class="tm" x="215" y="98" text-anchor="middle">pulls W toward 0</text><text class="ts" x="215" y="150" text-anchor="middle">→ smoother, closer to uniform</text><line class="ln acc" x1="410" y1="110" x2="630" y2="110" marker-end="url(#arr)"/><text class="t" x="545" y="80" text-anchor="middle">data loss (NLL)</text><text class="tm" x="545" y="98" text-anchor="middle">pulls W to match the real counts</text><text class="ts" x="545" y="150" text-anchor="middle">→ sharper, fits the names</text><text class="t" x="380" y="200" text-anchor="middle">bigger penalty strength  =  more fake counts  =  smoother model</text></svg><figcaption>Two forces act on every weight. The penalty is the “spring” he talks about.</figcaption></figure>
+<div class="oneline"><small>In one line</small>Pushing W towards 0 makes predictions more uniform, which is the neural-net version of smoothing.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c41" data-title="The regularization loss in code" data-num="41" data-track><header class="chead"><span class="num">41</span><h2>The regularization loss in code</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=6718s" target="_blank" rel="noopener" title="Open the video at 1:51:58">&#9654; 1:51:58</a></header><div class="body">
+<pre class="code" data-lang="python"><code>loss = -probs[torch.arange(num), ys].log().mean() + 0.01 * (W**2).mean()</code></pre>
+<ul>
+<li><code>W**2</code> squares every weight, so signs vanish. It is <b>0 if W is all zeros</b> and grows as weights get large.</li>
+<li>Use <code>mean</code> rather than <code>sum</code> so it stays a manageable size (at the start the sum was about 1,539, the mean about 2.11).</li>
+<li>The loss now has <b>two parts</b>: match the data, and keep W small. He calls the second one a <b>spring</b> or a <b>gravity</b> pulling W to zero.</li>
+<li>The <b>strength</b> (0.01 here) acts like the <b>number of fake counts</b>. Make it huge and predictions become fully uniform.</li>
+<li>With it, the full-data loss ends near <b>2.48</b>, a touch above 2.46 because the spring costs a little fit.</li>
+</ul>
+<div class="callout why"><b class="ctitle">Link to your other notes</b><div>This is what is usually called <b>L2 regularization</b>. In the MAP view it is a Gaussian prior on the weights.</div></div>
+<div class="oneline"><small>In one line</small>loss = NLL + 0.01 * mean(W**2): the penalty pulls weights to zero, like smoothing.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c42" data-title="Sampling from the net, and the wrap-up" data-num="42" data-track><header class="chead"><span class="num">42</span><h2>Sampling from the net, and the wrap-up</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=6858s" target="_blank" rel="noopener" title="Open the video at 1:54:18">&#9654; 1:54:18</a></header><div class="body">
+<pre class="code" data-lang="python"><code>xenc   = F.one_hot(torch.tensor([ix]), num_classes=27).float()
+logits = xenc @ W
+counts = logits.exp()
+p = counts / counts.sum(1, keepdims=True)
+ix = torch.multinomial(p, num_samples=1, replacement=True, generator=g).item()</code></pre>
+<ul>
+<li>Same loop as before; only the row lookup is replaced by the network's forward pass.</li>
+<li>The names come out almost the same as the counting model's: <b>mor., axx., minaymoryles., kondlaisah.</b> match, and the fifth differs by one letter. I think that is the small regularizer, but that is my guess.</li>
+</ul>
+<p><b>What we covered:</b> the bigram model, training it two ways, sampling from it, and scoring it with the negative log-likelihood.</p>
+<p><b>Next videos:</b> more previous characters as input, more complex nets, all the way to transformers, with the same loss machinery.</p>
+<div class="oneline"><small>In one line</small>Sampling from the net works like before; both ways give the same model, and the neural way scales.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c43" data-title="Part 2 test: can you explain it?" data-num="T2" data-track><header class="chead"><span class="num">T2</span><h2>Part 2 test: can you explain it?</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=7020s" target="_blank" rel="noopener" title="Open the video at 1:57:00">&#9654; 1:57:00</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>Why can't we feed the integer 13 straight into a neuron, and what do we do?</span></summary><div class="ans">A neuron multiplies inputs by weights, and an index is a label, not a quantity. Use a <b>one-hot</b> vector (27 numbers, a single 1), cast to float.</div></details><details class="q"><summary><span>What shape is xenc @ W for 5 examples and a 27 x 27 W, and what does entry [3, 13] mean?</span></summary><div class="ans">Shape (5, 27). Entry [3, 13] is neuron 13's output for example 3: the dot product of row 3 of xenc with column 13 of W.</div></details><details class="q"><summary><span>What are logits and how do they become probabilities?</span></summary><div class="ans">Logits are the raw outputs, read as <b>log-counts</b>. Take <code>exp</code> to get positive counts, then divide each row by its sum. That pair is the <b>softmax</b>.</div></details><details class="q"><summary><span>How do you get the probability of the correct next letter for every example in one line?</span></summary><div class="ans"><code>probs[torch.arange(n), ys]</code>. Then <code>.log().mean()</code> with a minus sign gives the loss.</div></details><details class="q"><summary><span>What are the four steps of one gradient-descent iteration?</span></summary><div class="ans">Forward pass to the loss; reset <code>W.grad = None</code>; <code>loss.backward()</code>; update <code>W.data += -lr * W.grad</code>.</div></details><details class="q"><summary><span>Why does the neural net end at about the same loss as counting?</span></summary><div class="ans">Both use the same information (the previous letter) and the same model family. Gradient descent finds the table counting computes directly.</div></details><details class="q"><summary><span>What does one_hot(x) @ W do, and what does W.exp() resemble?</span></summary><div class="ans">It selects row x of W (a lookup). W holds log-counts, so <code>W.exp()</code> resembles the count table N.</div></details><details class="q"><summary><span>How is regularization related to smoothing?</span></summary><div class="ans">W = 0 gives uniform probabilities, so pulling W towards 0 (the penalty term) smooths the model, like adding fake counts. A stronger penalty means more fake counts.</div></details><details class="q"><summary><span>Why is the table approach unscalable, but the neural net is not?</span></summary><div class="ans">With k letters of context a table needs 27^k rows. A neural net computes logits from the input instead, so only the forward pass grows.</div></details><div class="oneline"><small>In one line</small>If you can answer these, Part 2 is done.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p3" data-short="Cheat sheet"><div class="kicker">Cheat sheet</div><h2>Everything on one page</h2><p>Shapes, numbers, gotchas and words to know. Skim this the day before you need it.</p></section><section class="concept" id="s1" data-title="Shapes at a glance" data-num="★"><header class="chead"><span class="num">★</span><h2>Shapes at a glance</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=5173s" target="_blank" rel="noopener" title="Open the video at 1:26:13">&#9654; 1:26:13</a></header><div class="body">
+<table class="t"><tr><th>thing</th><th>shape</th><th>note</th></tr>
+<tr><td class="m">N, P</td><td><span class="shape">(27, 27)</span></td><td>counts / probabilities, row = previous letter</td></tr>
+<tr><td class="m">N[0], P[0]</td><td><span class="shape">(27)</span></td><td>distribution of first letters</td></tr>
+<tr><td class="m">P.sum(1, keepdim=True)</td><td><span class="shape">(27, 1)</span></td><td>row totals</td></tr>
+<tr><td class="m">xs, ys (for "emma")</td><td><span class="shape">(5)</span></td><td>integers: input and label</td></tr>
+<tr><td class="m">xenc</td><td><span class="shape">(5, 27)</span></td><td>one-hot floats</td></tr>
+<tr><td class="m">W, W.grad</td><td><span class="shape">(27, 27)</span></td><td>weights, and their gradient</td></tr>
+<tr><td class="m">logits, counts, probs</td><td><span class="shape">(5, 27)</span></td><td>one row per example</td></tr>
+<tr><td class="m">probs[arange, ys]</td><td><span class="shape">(5)</span></td><td>probability of the true next letter</td></tr>
+<tr><td class="m">loss</td><td><span class="shape">()</span></td><td>a single number</td></tr></table>
+<div class="oneline"><small>In one line</small>Row = which example (or which previous letter); 27 = number of possible letters.</div></div></section><section class="concept" id="s2" data-title="Numbers worth remembering" data-num="★"><header class="chead"><span class="num">★</span><h2>Numbers worth remembering</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=3482s" target="_blank" rel="noopener" title="Open the video at 58:02">&#9654; 58:02</a></header><div class="body">
+<table class="t"><tr><th>what</th><th>value</th></tr>
+<tr><td>names in the dataset</td><td class="m">32,033 (2 to 15 letters)</td></tr>
+<tr><td>characters in the table</td><td class="m">26 letters + '.' = 27</td></tr>
+<tr><td>bigram examples in total</td><td class="m">228,146</td></tr>
+<tr><td>commonest pairs</td><td class="m">n→end 6,763 · a→end 6,640 · a→n 5,438 · start→a 4,410</td></tr>
+<tr><td>no-knowledge baseline probability</td><td class="m">1/27 ≈ 4%</td></tr>
+<tr><td>uniform-guess loss</td><td class="m">ln 27 ≈ 3.30 (my arithmetic)</td></tr>
+<tr><td>counting loss</td><td class="m">≈ 2.45 (2.4540; 2.4546 with +1 smoothing)</td></tr>
+<tr><td>random W, name "emma"</td><td class="m">3.77</td></tr>
+<tr><td>trained neural net</td><td class="m">≈ 2.46 (≈ 2.48 with 0.01 regularization)</td></tr>
+<tr><td>learning rates seen</td><td class="m">0.1 (slow) · 50 (works here)</td></tr>
+<tr><td>seed used</td><td class="m">2147483647</td></tr></table>
+<div class="oneline"><small>In one line</small>The whole story in numbers: 3.77 at the start, about 2.45 once trained.</div></div></section><section class="concept" id="s3" data-title="Gotchas he points out" data-num="★"><header class="chead"><span class="num">★</span><h2>Gotchas he points out</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=2670s" target="_blank" rel="noopener" title="Open the video at 44:30">&#9654; 44:30</a></header><div class="body">
+<ol>
+<li><b>sum() needs dim and keepdim.</b> Otherwise it sums everything or squeezes a dimension.</li>
+<li><b>Broadcasting can silently go wrong.</b> Without keepdim the wrong direction is normalised. Check <code>P[0].sum()</code>.</li>
+<li><b>multinomial needs replacement=True</b> to draw several samples.</li>
+<li><b>torch.Tensor vs torch.tensor:</b> capital gives floats, lowercase keeps integers. Prefer lowercase.</li>
+<li><b>one_hot returns integers.</b> Cast with <code>.float()</code>.</li>
+<li><b>A zero probability gives infinite loss.</b> Smooth the model.</li>
+<li><b>Set W.grad = None</b> before each backward pass, or gradients pile up.</li>
+<li><b>requires_grad=True</b> on W, or backward has nothing to fill.</li>
+<li><b>Don't guess-and-check weights.</b> Use the gradient.</li>
+<li><b>Learning rate depends on the problem.</b> 50 works for this tiny one, not in general.</li>
+</ol>
+<div class="oneline"><small>In one line</small>Most of the traps are about shapes, directions and data types.</div></div></section><section class="concept" id="s4" data-title="Words to know" data-num="★"><header class="chead"><span class="num">★</span><h2>Words to know</h2><a class="time" href="https://www.youtube.com/watch?v=PaCmpygFfXo&amp;t=0s" target="_blank" rel="noopener" title="Open the video at 0:00">&#9654; 0:00</a></header><div class="body">
+<table class="t"><tr><th>word</th><th>meaning here</th></tr>
+<tr><td><b>bigram</b></td><td>a pair of neighbouring characters</td></tr>
+<tr><td><b>token</b></td><td>a symbol the model works with (here: a letter or '.')</td></tr>
+<tr><td><b>language model</b></td><td>a model that predicts what comes next in a sequence</td></tr>
+<tr><td><b>likelihood</b></td><td>the probability the model gives to the whole dataset</td></tr>
+<tr><td><b>NLL</b></td><td>negative log-likelihood, the loss; lower is better</td></tr>
+<tr><td><b>smoothing</b></td><td>adding fake counts so no probability is 0</td></tr>
+<tr><td><b>one-hot</b></td><td>a vector of zeros with a single 1</td></tr>
+<tr><td><b>logits</b></td><td>raw outputs of the layer, read as log-counts</td></tr>
+<tr><td><b>softmax</b></td><td>exp, then normalise: numbers to probabilities</td></tr>
+<tr><td><b>gradient</b></td><td>how much each weight changes the loss</td></tr>
+<tr><td><b>learning rate</b></td><td>how big a step to take against the gradient</td></tr>
+<tr><td><b>regularization</b></td><td>an extra loss term that keeps weights small</td></tr>
+<tr><td><b>broadcasting</b></td><td>stretching size-1 dimensions so shapes match</td></tr></table>
+<div class="oneline"><small>In one line</small>If a word here feels fuzzy, jump back to its concept card.</div></div></section>
+</main>
+</div>
+<div class="fnav" role="navigation" aria-label="Concept navigation"><div class="fbar"><i id="fbar"></i></div>
+<div class="frow"><button class="btn" id="fprev" type="button">← Back</button><span class="flab" id="flab"></span><button class="btn primary" id="fnext" type="button">Next →</button></div></div>
+<script>
+(function(){
+  var KEY='makemore-notes-v1';
+  var st={bionic:true,focus:false,theme:null,done:{}};
+  try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);for(var k in o)st[k]=o[k];}}catch(e){}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
+  var root=document.documentElement;
+  var $=function(s,c){return (c||document).querySelector(s)};
+  var $$=function(s,c){return [].slice.call((c||document).querySelectorAll(s))};
+
+  /* ---------- code highlighting (tiny Python tokenizer) */
+  var RE=/(#[^\n]*)|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|\b(\d+(?:\.\d+)?)\b|\b(def|for|in|while|if|else|break|import|as|from|return|lambda|and|or|not|True|False|None)\b|\b(zip|print|range|sum|len|min|max|sorted|list|set|enumerate|open|float)\b/g;
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  $$('pre.code code').forEach(function(c){
+    var t=c.textContent,out='',last=0,m;RE.lastIndex=0;
+    while((m=RE.exec(t))){
+      out+=esc(t.slice(last,m.index));
+      var cls=m[1]?'c':m[2]?'s':m[3]?'n':m[4]?'k':m[5]?'f':'f';
+      out+='<span class="tk-'+cls+'">'+esc(m[0])+'</span>';
+      last=m.index+m[0].length;
+    }
+    out+=esc(t.slice(last));c.innerHTML=out;
+  });
+
+  /* ---------- bionic reading: bold the start of each word (switch is CSS-only afterwards) */
+  var WORD=/[A-Za-zÀ-ɏ][A-Za-zÀ-ɏ'’]*/g;
+  function wrap(text){
+    var f=document.createDocumentFragment(),last=0;
+    text.replace(WORD,function(m,off){
+      if(off>last)f.appendChild(document.createTextNode(text.slice(last,off)));
+      var n=Math.max(1,Math.ceil(m.length*0.45)),b=document.createElement('b');
+      b.className='bn';b.textContent=m.slice(0,n);f.appendChild(b);
+      if(m.length>n)f.appendChild(document.createTextNode(m.slice(n)));
+      last=off+m.length;return m;
+    });
+    if(last<text.length)f.appendChild(document.createTextNode(text.slice(last)));
+    return f;
+  }
+  var SKIP='code,pre,svg,button,h1,h2,h3,h4,.shape,.chip,.time,.num,.kicker,.ctitle,b,strong,script,style,.formula,.nobn,th';
+  var walker=document.createTreeWalker($('main'),NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+    if(!n.nodeValue.trim())return NodeFilter.FILTER_REJECT;
+    var p=n.parentElement;if(!p||p.closest(SKIP))return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;}});
+  var nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(function(n){n.parentNode.replaceChild(wrap(n.nodeValue),n);});
+
+  /* ---------- table of contents */
+  var concepts=$$('.concept'),toc=$('#toc'),tocLinks=[];
+  var partOf={};
+  var cur=-1,part=null,idx=0;
+  $$('main > .part, main > .concept').forEach(function(el){
+    if(el.classList.contains('part')){
+      var h=document.createElement('h3');h.textContent=el.getAttribute('data-short');toc.appendChild(h);
+    }else{
+      var a=document.createElement('a');a.href='#'+el.id;
+      var num=el.getAttribute('data-num');
+      a.innerHTML='<span class="n">'+(num||'')+'</span><span>'+esc(el.getAttribute('data-title'))+'</span>';
+      a.addEventListener('click',function(e){
+        var i=concepts.indexOf(el);
+        if(root.getAttribute('data-focus')==='on'){e.preventDefault();setCurrent(i,true);}
+        toc.classList.remove('open');
+      });
+      toc.appendChild(a);tocLinks.push(a);
+    }
+  });
+
+  /* ---------- done tracking */
+  var trackable=concepts.filter(function(c){return c.hasAttribute('data-track');});
+  function refreshDone(){
+    var n=0;
+    concepts.forEach(function(c,i){
+      var d=!!st.done[c.id];
+      c.classList.toggle('done',d);
+      tocLinks[i].classList.toggle('done',d);
+      var b=$('.done-btn',c);if(b){b.textContent=d?'✓ Got it':'Mark as got it';}
+      if(d&&c.hasAttribute('data-track'))n++;
+    });
+    $('#progText').textContent=n+' / '+trackable.length+' got it';
+    $('#progBar').style.width=(trackable.length?n/trackable.length*100:0)+'%';
+  }
+  $$('.done-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      var c=b.closest('.concept');st.done[c.id]=!st.done[c.id];save();refreshDone();
+    });
+  });
+  var rs=$('#resetBtn');if(rs)rs.addEventListener('click',function(){
+    if(confirm('Clear all your "got it" ticks?')){st.done={};save();refreshDone();}
+  });
+
+  /* ---------- current concept + focus mode */
+  var fnav=$('.fnav'),fprev=$('#fprev'),fnext=$('#fnext'),flab=$('#flab'),fbar=$('#fbar');
+  function updateNav(){
+    tocLinks.forEach(function(a,i){a.classList.toggle('active',i===cur);});
+    if(cur<0)return;
+    flab.textContent=(cur+1)+' / '+concepts.length+' · '+concepts[cur].getAttribute('data-title');
+    fbar.style.width=((cur+1)/concepts.length*100)+'%';
+    fprev.disabled=cur===0;
+    fnext.textContent=cur===concepts.length-1?'Back to top ↑':'Next →';
+  }
+  function setCurrent(i,scroll){
+    cur=Math.max(0,Math.min(i,concepts.length-1));
+    concepts.forEach(function(c,k){c.classList.toggle('current',k===cur);});
+    updateNav();
+    if(scroll){var y=concepts[cur].getBoundingClientRect().top+window.scrollY-84;window.scrollTo({top:Math.max(0,y)});}
+  }
+  function visibleIndex(){
+    var f=0;concepts.forEach(function(c,i){if(c.getBoundingClientRect().top<=window.innerHeight*0.35)f=i;});return f;
+  }
+  var ticking=false;
+  window.addEventListener('scroll',function(){
+    if(root.getAttribute('data-focus')==='on'||ticking)return;ticking=true;
+    requestAnimationFrame(function(){ticking=false;var v=visibleIndex();if(v!==cur){cur=v;concepts.forEach(function(c,k){c.classList.toggle('current',k===cur);});updateNav();}});
+  },{passive:true});
+  fprev.addEventListener('click',function(){setCurrent(cur-1,true);});
+  fnext.addEventListener('click',function(){
+    if(cur>=concepts.length-1){window.scrollTo({top:0});setCurrent(0,false);}else setCurrent(cur+1,true);
+  });
+  document.addEventListener('keydown',function(e){
+    if(root.getAttribute('data-focus')!=='on'||e.metaKey||e.ctrlKey||e.altKey)return;
+    if(e.key==='ArrowRight'){setCurrent(cur+1,true);}
+    if(e.key==='ArrowLeft'){setCurrent(cur-1,true);}
+  });
+
+  /* ---------- toolbar */
+  function sync(){
+    root.setAttribute('data-bionic',st.bionic?'on':'off');
+    root.setAttribute('data-focus',st.focus?'on':'off');
+    var th=st.theme||(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    root.setAttribute('data-theme',th);
+    [['#bionicBtn',st.bionic],['#focusBtn',st.focus]].forEach(function(p){
+      var b=$(p[0]);b.setAttribute('aria-pressed',String(p[1]));$('.st',b).textContent=p[1]?'On':'Off';
+    });
+  }
+  $('#bionicBtn').addEventListener('click',function(){st.bionic=!st.bionic;save();sync();});
+  $('#focusBtn').addEventListener('click',function(){
+    st.focus=!st.focus;save();
+    var i=st.focus?visibleIndex():cur;sync();
+    if(st.focus)setCurrent(i,true);else if(cur>=0)setTimeout(function(){setCurrent(cur,true);},30);
+  });
+  $('#themeBtn').addEventListener('click',function(){
+    var now=root.getAttribute('data-theme');st.theme=now==='dark'?'light':'dark';save();sync();
+  });
+  $('#tocBtn').addEventListener('click',function(){toc.classList.toggle('open');});
+
+  sync();refreshDone();
+  setCurrent(0,false);
+  if(st.focus)setCurrent(visibleIndex(),false);
+})();
+</script>
+</body>
+</html>

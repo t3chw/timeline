@@ -1,0 +1,1070 @@
+<!doctype html>
+<html lang="en" data-bionic="on" data-focus="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>makemore part 3: activations, gradients and batch norm (revision notes)</title>
+<script>
+(function(){var r=document.documentElement;try{var s=JSON.parse(localStorage.getItem('makemore-part3-notes-v1')||'{}');
+if(s.bionic===false)r.setAttribute('data-bionic','off');if(s.focus===true)r.setAttribute('data-focus','on');
+var t=s.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');r.setAttribute('data-theme',t);}catch(e){}})();
+</script>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#faf8f4;--surface:#ffffff;--surface-2:#f2efe8;--ink:#1c1a17;--ink-2:#57524a;--ink-3:#8b857a;
+  --line:#e8e3d9;--line-2:#d6d0c2;
+  --accent:#2f9e6b;--accent-ink:#1d6b47;--accent-soft:#e1f2e9;
+  --warn:#b4531f;--warn-soft:#fbebe0;--info:#2b5fa8;--info-soft:#e5eefa;
+  --code-bg:#f5f2ea;--code-ink:#2a2723;--k:#8a3ea8;--s:#2f7d4f;--n:#b4531f;--c:#8b857a;--f:#2b5fa8;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --shadow:0 1px 2px rgba(60,40,10,.05),0 10px 28px -14px rgba(60,40,10,.18);
+}
+:root[data-theme=dark]{
+  color-scheme:dark;
+  --bg:#121110;--surface:#1b1a18;--surface-2:#252320;--ink:#f3f0ea;--ink-2:#bdb7ab;--ink-3:#847e72;
+  --line:#2c2a26;--line-2:#3b3833;
+  --accent:#46c28a;--accent-ink:#7fe0b2;--accent-soft:#15301f;
+  --warn:#f0905a;--warn-soft:#3a2418;--info:#7aa7e8;--info-soft:#18263a;
+  --code-bg:#161513;--code-ink:#e8e4dc;--k:#d29bf0;--s:#8fd6a8;--n:#f0a070;--c:#847e72;--f:#8fb8f2;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.6);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+[hidden]{display:none!important}
+
+/* ---------- top bar */
+.top{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.top .in{max-width:76rem;margin:0 auto;padding:.55rem 1.25rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.brand{font:600 1.05rem var(--serif);letter-spacing:-.01em;margin-right:auto;white-space:nowrap}
+.brand small{display:block;font:500 .72rem var(--sans);color:var(--ink-3);letter-spacing:0}
+.tool{display:inline-flex;align-items:center;gap:.45rem;padding:.38rem .5rem .38rem .8rem;font:500 .82rem var(--sans);
+  color:var(--ink-2);background:var(--surface);border:1px solid var(--line-2);border-radius:99px;cursor:pointer}
+.tool:hover{color:var(--ink);border-color:var(--ink-3)}
+.tool .st{font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.08rem .45rem;border-radius:99px;background:var(--surface-2);color:var(--ink-3)}
+.tool[aria-pressed=true]{color:var(--accent-ink);background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 55%,var(--line-2))}
+.tool[aria-pressed=true] .st{background:var(--accent-ink);color:var(--bg)}
+.tool.plain{padding:.38rem .8rem}
+#tocBtn{display:none}
+.prog{font:600 .78rem var(--sans);color:var(--ink-2);padding:.3rem .7rem;border-radius:99px;background:var(--surface-2);font-variant-numeric:tabular-nums}
+.pbar{height:3px;background:var(--surface-2)}
+.pbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+
+/* ---------- layout */
+.shell{max-width:76rem;margin:0 auto;padding:0 1.25rem 6rem;display:grid;grid-template-columns:17.5rem minmax(0,1fr);gap:2.5rem}
+#toc{position:sticky;top:4.6rem;align-self:start;max-height:calc(100vh - 5.4rem);overflow:auto;padding:1.4rem 0 1rem;font-size:.84rem}
+#toc h3{font:700 .68rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:1.1rem 0 .4rem}
+#toc h3:first-child{margin-top:0}
+#toc a{display:flex;gap:.5rem;align-items:baseline;padding:.28rem .6rem;border-radius:8px;text-decoration:none;color:var(--ink-2);line-height:1.35}
+#toc a:hover{background:var(--surface-2);color:var(--ink)}
+#toc a.active{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+#toc a .n{flex:none;width:1.6rem;color:var(--ink-3);font-variant-numeric:tabular-nums;font-size:.76rem}
+#toc a.done .n::after{content:"✓";color:var(--accent)}
+#toc a.done .n{font-size:0}
+#toc a.done .n::after{font-size:.9rem}
+main{min-width:0}
+
+/* ---------- intro + part banners */
+.intro{margin-top:2.2rem;padding:1.8rem 1.8rem 1.5rem;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.kicker{font:700 .72rem var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink)}
+.intro h1{font:600 clamp(2rem,5vw,3rem)/1.05 var(--serif);letter-spacing:-.03em;margin:.5rem 0 .8rem}
+.intro p{color:var(--ink-2);max-width:42rem;margin:.4rem 0}
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:.7rem;margin-top:1.2rem}
+.how div{padding:.75rem .9rem;border-radius:12px;background:var(--surface-2);font-size:.88rem;color:var(--ink-2)}
+.how div>b:not(.bn){display:block;color:var(--ink);margin-bottom:.15rem}
+.part{margin:4.2rem 0 0;padding:1.4rem 1.6rem;border-radius:16px;background:linear-gradient(135deg,var(--accent-soft),var(--surface));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line))}
+.part h2{font:600 1.7rem/1.15 var(--serif);letter-spacing:-.02em;margin:.3rem 0 .4rem}
+.part p{margin:.2rem 0;color:var(--ink-2);max-width:40rem}
+
+/* ---------- concept cards */
+.concept{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:1.4rem 1.6rem 1.2rem;
+  margin-top:2rem;box-shadow:var(--shadow);scroll-margin-top:5.2rem}
+.concept + .concept{margin-top:3.6rem}
+.concept + .concept::before{content:"";position:absolute;left:0;right:0;top:-1.8rem;height:2px;opacity:.6;
+  background:repeating-linear-gradient(90deg,var(--ink-3) 0 8px,transparent 8px 16px)}
+.concept + .concept::after{content:"✓  concept done";position:absolute;left:50%;top:-1.8rem;transform:translate(-50%,-50%);padding:0 .9rem;
+  background:var(--bg);font:600 .68rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.concept.done{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.chead{display:flex;align-items:flex-start;gap:.85rem;margin-bottom:.8rem}
+.num{flex:none;min-width:2.2rem;height:2.2rem;padding:0 .3rem;border-radius:99px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font:700 .82rem var(--sans);font-variant-numeric:tabular-nums}
+.chead h2{font:600 1.45rem/1.2 var(--serif);letter-spacing:-.015em;margin:.12rem 0 0}
+.time{margin-left:auto;flex:none;font:600 .74rem var(--mono);text-decoration:none;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);padding:.22rem .55rem;border-radius:99px;white-space:nowrap}
+.time:hover{color:var(--accent-ink);border-color:var(--accent)}
+.body p{margin:.7rem 0}
+.body ul,.body ol{padding-left:1.25rem;margin:.7rem 0}
+.body li{margin:.3rem 0}
+.body .lead{font-size:1.08rem;color:var(--ink)}
+.oneline{margin-top:1.2rem;padding:.7rem .95rem;border-radius:12px;background:var(--accent-soft);border-left:4px solid var(--accent);font-weight:600}
+.oneline small{display:block;font:700 .66rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:.1rem}
+.cfoot{display:flex;justify-content:flex-end;margin-top:1rem}
+.done-btn{font:600 .84rem var(--sans);padding:.45rem .95rem;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.done-btn:hover{border-color:var(--ink-3);color:var(--ink)}
+.concept.done .done-btn{background:var(--accent-ink);color:var(--bg);border-color:var(--accent-ink)}
+
+/* bionic */
+.bn{font-weight:inherit}
+html[data-bionic=on] .bn{font-weight:700}
+
+/* pieces */
+.code{background:var(--code-bg);border:1px solid var(--line);border-radius:12px;padding:.9rem 1rem;overflow:auto;font:.83rem/1.65 var(--mono);color:var(--code-ink);margin:1rem 0;tab-size:4}
+.code code{font:inherit}
+.tk-k{color:var(--k)}.tk-s{color:var(--s)}.tk-n{color:var(--n)}.tk-c{color:var(--c);font-style:italic}.tk-f{color:var(--f)}
+.shape{font:.8rem var(--mono);background:var(--info-soft);color:var(--info);padding:.05rem .4rem;border-radius:6px;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:.45rem;margin:.9rem 0}
+.chip{font:600 .84rem var(--mono);padding:.28rem .62rem;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
+.callout{margin:1rem 0;padding:.75rem .95rem;border-radius:12px;border-left:4px solid var(--accent);background:var(--accent-soft)}
+.callout .ctitle{display:block;font:700 .68rem var(--sans);letter-spacing:.14em;text-transform:uppercase;margin-bottom:.15rem;color:var(--accent-ink)}
+.callout.gotcha{border-color:var(--warn);background:var(--warn-soft)}.callout.gotcha .ctitle{color:var(--warn)}
+.callout.why{border-color:var(--info);background:var(--info-soft)}.callout.why .ctitle{color:var(--info)}
+.callout>div{font-size:.96rem}
+.callout p{margin:.35rem 0}
+table.t{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.9rem;display:block;overflow-x:auto}
+table.t th,table.t td{padding:.5rem .8rem;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+table.t th{background:var(--surface-2);font-weight:650;border-bottom-color:var(--line-2)}
+table.t td.m,table.t td code,.mono{font-family:var(--mono);font-size:.84rem}
+table.t tr.hl td{background:var(--accent-soft)}
+.formula{margin:1rem 0;padding:.9rem 1rem;border-radius:12px;background:var(--surface-2);text-align:center;font:1.12rem var(--serif);overflow-x:auto}
+.frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 .25em;font-size:.95em}
+.frac>span:first-child{border-bottom:1.5px solid currentColor;padding:0 .35em .1em}
+.frac>span:last-child{padding:.1em .35em 0}
+.formula i{font-family:var(--serif)}
+.fig{margin:1.2rem 0}
+.fig figcaption{font-size:.84rem;color:var(--ink-3);margin-top:.4rem;text-align:center}
+.d{width:100%;height:auto;display:block}
+.hint{color:var(--ink-3);font-size:.9rem}
+details.q{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:0 1rem;margin:.55rem 0}
+details.q[open]{border-color:var(--line-2);padding-bottom:.9rem}
+details.q summary{cursor:pointer;list-style:none;display:flex;gap:.7rem;align-items:flex-start;padding:.8rem 0;font-weight:600}
+details.q summary::-webkit-details-marker{display:none}
+details.q summary::before{content:"?";flex:none;display:grid;place-items:center;width:1.4rem;height:1.4rem;margin-top:.15rem;border-radius:50%;font:700 .78rem var(--sans);color:var(--accent-ink);background:var(--accent-soft)}
+details.q[open] summary::before{content:"✓"}
+details.q .ans{margin-left:2.1rem;color:var(--ink-2)}
+details.q .ans p{margin:.4rem 0}
+
+/* svg */
+.d .box{fill:var(--surface);stroke:var(--line-2);stroke-width:1.5}
+.d .box.acc{fill:var(--accent-soft);stroke:var(--accent)}
+.d .box.info{fill:var(--info-soft);stroke:var(--info)}
+.d .box.warn{fill:var(--warn-soft);stroke:var(--warn)}
+.d .cell{fill:var(--surface);stroke:var(--line-2);stroke-width:1.2}
+.d .cell.hl{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.8}
+.d .cell.sum{fill:var(--info-soft);stroke:var(--info)}
+.d .t{fill:var(--ink);font:600 13px var(--sans)}
+.d .tm{fill:var(--ink-2);font:12.5px var(--sans)}
+.d .ts{fill:var(--ink-3);font:11.5px var(--sans)}
+.d .tmono{fill:var(--ink);font:12.5px var(--mono)}
+.d .lane{fill:var(--ink-3);font:700 11px var(--sans);letter-spacing:.14em}
+.d .big{fill:var(--ink-2);font:600 26px var(--sans)}
+.d .ln{stroke:var(--ink-3);stroke-width:1.7;fill:none}
+.d .ln.acc{stroke:var(--accent)}.d .ln.warn{stroke:var(--warn)}
+.d .dash{stroke:var(--ink-3);stroke-width:1.5;stroke-dasharray:5 5}
+.d .axis{stroke:var(--ink-3);stroke-width:1.3}
+.d .grid{stroke:var(--line);stroke-width:1}
+.d .curve{fill:none;stroke:var(--accent);stroke-width:2.6}
+.d .pt{fill:var(--ink);stroke:var(--bg);stroke-width:2}.d .pt.acc{fill:var(--accent)}.d .pt.warn{fill:var(--warn)}
+.d .bar{fill:var(--line-2)}.d .bar.hot{fill:var(--accent)}
+.d .node{fill:var(--surface);stroke:var(--line-2);stroke-width:2}.d .node.acc{fill:var(--accent-soft);stroke:var(--accent)}
+.d .ball{fill:var(--info-soft);stroke:var(--info);stroke-width:2}
+#arr path{fill:var(--ink-3)}
+
+/* focus mode */
+html[data-focus=on] .concept:not(.current),html[data-focus=on] .part,html[data-focus=on] .intro{display:none}
+html[data-focus=on] .concept{margin-top:1.6rem}
+html[data-focus=on] .concept::before,html[data-focus=on] .concept::after{display:none}
+html[data-focus=on] .body{font-size:1.1rem;line-height:1.8}
+html[data-focus=on] .concept.current{animation:in .3s ease}
+@keyframes in{from{opacity:0;transform:translateY(8px)}}
+.fnav{display:none;position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);width:min(44rem,calc(100% - 1.5rem));z-index:60;
+  padding:.7rem .85rem .8rem;background:color-mix(in srgb,var(--surface) 94%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border:1px solid var(--line-2);border-radius:16px;box-shadow:0 12px 36px -12px rgba(0,0,0,.35)}
+html[data-focus=on] .fnav{display:block}
+.fbar{height:4px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-bottom:.65rem}
+.fbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.frow{display:flex;align-items:center;gap:.7rem}
+.flab{flex:1;min-width:0;text-align:center;font-size:.84rem;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{font:600 .86rem var(--sans);padding:.5rem 1rem;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+html[data-focus=on] main{padding-bottom:6rem}
+
+/* responsive */
+@media (max-width:40rem){
+  .top{position:static}
+  .brand{display:none}
+  .top .in{padding:.6rem 1rem}
+  .concept{scroll-margin-top:1rem}
+  .fig{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .fig .d{min-width:600px}
+  .fig figcaption{position:sticky;left:0;width:calc(100vw - 4rem)}
+}
+@media (max-width:62rem){
+  .shell{display:block}
+  #tocBtn{display:inline-flex}
+  #toc{display:none;position:fixed;z-index:70;left:0;right:0;top:0;bottom:0;max-height:none;background:var(--bg);padding:4.2rem 1.25rem 2rem}
+  #toc.open{display:block}
+  .time{margin-left:0}
+  .chead{flex-wrap:wrap}
+  .concept{padding:1.1rem 1.1rem 1rem}
+  .brand small{display:none}
+}
+@media print{
+  .top,#toc,.fnav,.cfoot{display:none!important}
+  .shell{display:block}
+  .concept{box-shadow:none;break-inside:avoid-page}
+  html[data-focus=on] .concept:not(.current),html[data-focus=on] .part{display:block!important}
+  details.q{break-inside:avoid}
+}
+
+.d .bar.warn{fill:var(--warn)}
+.d .bar.info{fill:var(--info)}
+.d .cellw{fill:var(--ink-2);stroke:var(--line);stroke-width:1}
+.d .cellb{fill:var(--surface);stroke:var(--line);stroke-width:1}
+.d .curve.warn{stroke:var(--warn)}
+.d .curve.info{stroke:var(--info)}
+.d .curve.thin{stroke-width:2}
+.d .shade{fill:var(--warn);opacity:.18}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z"/></marker>
+</defs></svg>
+<header class="top"><div class="in">
+<button class="tool plain" id="tocBtn" type="button" aria-label="Contents">☰ Contents</button>
+<div class="brand">makemore · part 3<small>activations, gradients, batch norm</small></div>
+<span class="prog" id="progText">0 / 51 got it</span>
+<button class="tool" id="bionicBtn" type="button" aria-pressed="true"><span>Bionic reading</span><span class="st">On</span></button>
+<button class="tool" id="focusBtn" type="button" aria-pressed="false"><span>Focus mode</span><span class="st">Off</span></button>
+<button class="tool plain" id="themeBtn" type="button" aria-label="Toggle theme">◐ Theme</button>
+</div><div class="pbar"><i id="progBar"></i></div></header>
+<div class="shell">
+<nav id="toc" aria-label="Contents"></nav>
+<main>
+
+<section class="intro">
+<div class="kicker">Revision notes · Machine Learning</div>
+<h1>makemore, part 3: activations, gradients and batch norm</h1>
+<p>Notes from Andrej Karpathy's lecture <b>“Building makemore Part 3: Activations &amp; Gradients, BatchNorm”</b> (1 h 56 min). They follow the order he teaches in, in my own words, with diagrams. Every <span class="mono">▶ time</span> chip opens the video at that moment. Where I add something of my own, it says “my note”.</p>
+<div class="how">
+<div><b>Bionic reading</b>The start of each word is bold to guide your eyes. Toggle it at the top.</div>
+<div><b>Focus mode</b>Shows one concept at a time. Use ← and → or the buttons.</div>
+<div><b>Got it</b>Tick each concept when you can explain it. Progress is saved in this browser.</div>
+<div><b>In one line</b>Every card ends with a single sentence to recall. Start there when revising.</div>
+</div>
+<p style="margin-top:1rem"><button class="tool plain" id="resetBtn" type="button">Reset my ticks</button></p>
+</section>
+<section class="part" id="p0" data-short="Where we start"><div class="kicker">Part 0 · 0:00 – 4:30</div><h2>Why look inside the network?</h2><p>The goal of this lecture, and the code we start from.</p></section><section class="concept" id="c1" data-title="Why look inside the network?" data-num="1" data-track><header class="chead"><span class="num">1</span><h2>Why look inside the network?</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=0s" target="_blank" rel="noopener" title="Open the video at 0:00">&#9654; 0:00</a></header><div class="body">
+<p class="lead">Last time we built an MLP. Next we want <b>bigger networks</b>: RNNs, GRUs, LSTMs. First, one lecture to understand what happens <b>inside</b> a network while it trains.</p>
+<ul>
+<li>We want a good feel for the <b>activations</b> (the numbers each layer produces) and the <b>gradients</b> flowing backwards, and how they behave.</li>
+<li>This explains the <b>history</b> of the architectures. An RNN is very expressive, in principle able to implement any algorithm, but it is <b>hard to optimise</b> with ordinary gradient descent.</li>
+<li>The key to why is how activations and gradients behave during training. Many later variants were invented to improve exactly that.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Before bigger networks, learn to read activations and gradients, because that is why RNNs were hard to train.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c2" data-title="The starting code, tidied up" data-num="2" data-track><header class="chead"><span class="num">2</span><h2>The starting code, tidied up</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=61s" target="_blank" rel="noopener" title="Open the video at 1:01">&#9654; 1:01</a></header><div class="body">
+<p>Same MLP as last time, with the magic numbers pulled out into variables.</p>
+<pre class="code" data-lang="python"><code>n_embd = 10         # size of each character's embedding
+n_hidden = 200      # neurons in the hidden layer
+# 11,897 parameters, 200,000 steps, batch size 32
+# learning rate 0.1 for 100,000 steps, then 0.01</code></pre>
+<ul>
+<li>Result to beat: <b>train 2.12</b> and <b>val 2.17</b> (the screen shows 2.1245 and 2.1682).</li>
+<li>Evaluation moved into one function, <code>split_loss(split)</code>, which picks train, val or test.</li>
+</ul>
+<pre class="code" data-lang="python"><code>@torch.no_grad()                      # this decorator disables gradient tracking
+def split_loss(split):
+    x, y = {
+        'train': (Xtr, Ytr),
+        'val':   (Xdev, Ydev),
+        'test':  (Xte, Yte),
+    }[split]
+    emb = C[x]                                   # (N, block_size, n_embd)
+    embcat = emb.view(emb.shape[0], -1)          # (N, block_size * n_embd)
+    h = torch.tanh(embcat @ W1 + b1)             # (N, n_hidden)
+    logits = h @ W2 + b2                         # (N, vocab_size)
+    loss = F.cross_entropy(logits, y)
+    print(split, loss.item())</code></pre>
+<div class="oneline"><small>In one line</small>Same MLP with no magic numbers: 11,897 parameters, scoring about 2.12 train and 2.17 val.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c3" data-title="torch.no_grad" data-num="3" data-track><header class="chead"><span class="num">3</span><h2>torch.no_grad</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=190s" target="_blank" rel="noopener" title="Open the video at 3:10">&#9654; 3:10</a></header><div class="body">
+<p class="lead">Anything run under <b><code>@torch.no_grad()</code></b> is assumed <b>never to need gradients</b>.</p>
+<ul>
+<li>PyTorch then skips all the bookkeeping it normally does for a later <code>backward()</code>. It is as if every tensor had <code>requires_grad=False</code>.</li>
+<li>That makes evaluation <b>more efficient</b>: no graph is kept in memory.</li>
+<li>You can also use it as a context manager: <code>with torch.no_grad(): ...</code>. We will use that again for batch norm.</li>
+<li>Sampling works as before. The names are nicer than the bigram's, "still not fully name-like", but this is our starting point.</li>
+</ul>
+<div class="oneline"><small>In one line</small>no_grad tells PyTorch you will not call backward, so it skips building the gradient graph.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p1" data-short="Fix 1 · The starting loss"><div class="kicker">Part 1 · 4:30 – 13:00</div><h2>The loss should not start at 27</h2><p>The first thing wrong with the initialisation, and how to see it with one number.</p></section><section class="concept" id="c4" data-title="The first problem: loss 27 at step 0" data-num="4" data-track><header class="chead"><span class="num">4</span><h2>The first problem: loss 27 at step 0</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=270s" target="_blank" rel="noopener" title="Open the video at 4:30">&#9654; 4:30</a></header><div class="body">
+<p>Look at the very first printed loss. At step 0 it is <b>27.88</b>, and within a few iterations it falls to about 1 or 2.</p>
+<pre class="code" data-lang="python"><code>      0/ 200000: 27.8817</code></pre>
+<ul>
+<li>That rapid drop means the initialisation is <b>badly set</b>. There are several things wrong, and this is the first.</li>
+<li>In neural net training you almost always have a <b>rough idea what loss to expect at the start</b>. It depends on the loss function and the problem. 27 is not what we expect.</li>
+</ul>
+<div class="oneline"><small>In one line</small>A starting loss far above what you expect tells you the initialisation is wrong.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c5" data-title="What loss should we expect?" data-num="5" data-track><header class="chead"><span class="num">5</span><h2>What loss should we expect?</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=300s" target="_blank" rel="noopener" title="Open the video at 5:00">&#9654; 5:00</a></header><div class="body">
+<p>There are <b>27 characters</b> that could come next. At the start we have no reason to prefer any, so the net should output a <b>uniform</b> distribution: each character gets probability <b>1/27</b>.</p>
+<pre class="code" data-lang="python"><code>-torch.tensor(1/27.0).log()      # tensor(3.2958)</code></pre>
+<ul>
+<li>The loss is the negative log of the probability given to the right answer, so the expected starting loss is <b>about 3.30</b>.</li>
+<li>We got 27.88 instead: much, much higher.</li>
+</ul>
+<div class="callout why"><b class="ctitle">My note</b><div>27.88 ÷ 3.30 is about 8.4, so the net starts roughly eight times worse than random guessing.</div></div>
+<div class="oneline"><small>In one line</small>With 27 equally likely characters the expected starting loss is -ln(1/27), about 3.30.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c6" data-title="Confidently wrong" data-num="6" data-track><header class="chead"><span class="num">6</span><h2>Confidently wrong</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=361s" target="_blank" rel="noopener" title="Open the video at 6:01">&#9654; 6:01</a></header><div class="body">
+<p class="lead">At the start the net makes <b>messy probabilities</b>: some characters it is very sure about, some not. When it is <b>sure and wrong</b>, the loss is huge.</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 262" role="img" aria-label="Four-way example of confident mistakes"><rect class="box acc" x="10" y="10" width="230" height="220" rx="12"/><text class="t" x="125" y="34" text-anchor="middle">All logits ≈ 0</text><rect class="bar" x="34" y="146.0" width="34" height="30.0" rx="3"/><text class="tmono" x="51" y="194" text-anchor="middle">0</text><text class="ts" x="51" y="142.0" text-anchor="middle">0.25</text><rect class="bar" x="80" y="146.0" width="34" height="30.0" rx="3"/><text class="tmono" x="97" y="194" text-anchor="middle">1</text><text class="ts" x="97" y="142.0" text-anchor="middle">0.25</text><rect class="bar hot" x="126" y="146.0" width="34" height="30.0" rx="3"/><text class="tmono" x="143" y="194" text-anchor="middle">2</text><text class="ts" x="143" y="142.0" text-anchor="middle">0.25</text><rect class="bar" x="172" y="146.0" width="34" height="30.0" rx="3"/><text class="tmono" x="189" y="194" text-anchor="middle">3</text><text class="ts" x="189" y="142.0" text-anchor="middle">0.25</text><text class="tm" x="125" y="218" text-anchor="middle">loss 1.39 (= ln 4)</text><rect class="box" x="260" y="10" width="230" height="220" rx="12"/><text class="t" x="375" y="34" text-anchor="middle">Random logits</text><rect class="bar" x="284" y="136.4" width="34" height="39.6" rx="3"/><text class="tmono" x="301" y="194" text-anchor="middle">0</text><text class="ts" x="301" y="132.4" text-anchor="middle">0.33</text><rect class="bar" x="330" y="117.2" width="34" height="58.8" rx="3"/><text class="tmono" x="347" y="194" text-anchor="middle">1</text><text class="ts" x="347" y="113.2" text-anchor="middle">0.49</text><rect class="bar hot" x="376" y="161.6" width="34" height="14.4" rx="3"/><text class="tmono" x="393" y="194" text-anchor="middle">2</text><text class="ts" x="393" y="157.6" text-anchor="middle">0.12</text><rect class="bar" x="422" y="170.0" width="34" height="6.0" rx="3"/><text class="tmono" x="439" y="194" text-anchor="middle">3</text><text class="ts" x="439" y="166.0" text-anchor="middle">0.05</text><text class="tm" x="375" y="218" text-anchor="middle">loss 2.11</text><rect class="box warn" x="510" y="10" width="230" height="220" rx="12"/><text class="t" x="625" y="34" text-anchor="middle">Big logits (schematic)</text><rect class="bar" x="534" y="174.0" width="34" height="2.0" rx="3"/><text class="tmono" x="551" y="194" text-anchor="middle">0</text><text class="ts" x="551" y="170" text-anchor="middle">0.01</text><rect class="bar" x="580" y="59.6" width="34" height="116.4" rx="3"/><text class="tmono" x="597" y="194" text-anchor="middle">1</text><text class="ts" x="597" y="55.60000000000001" text-anchor="middle">0.97</text><rect class="bar hot" x="626" y="174.0" width="34" height="2.0" rx="3"/><text class="tmono" x="643" y="194" text-anchor="middle">2</text><text class="ts" x="643" y="170" text-anchor="middle">0.01</text><rect class="bar" x="672" y="174.0" width="34" height="2.0" rx="3"/><text class="tmono" x="689" y="194" text-anchor="middle">3</text><text class="ts" x="689" y="170" text-anchor="middle">0.01</text><text class="tm" x="625" y="218" text-anchor="middle">loss ≈ 4.6, worse if surer</text><text class="ts" x="380" y="252" text-anchor="middle">Green bar = the true label (index 2). Loss = −ln of the green bar's probability.</text></svg><figcaption>Uniform guesses cost the same whatever the label. Confident wrong guesses cost a lot.</figcaption></figure>
+<pre class="code" data-lang="python"><code>logits = torch.tensor([0.0, 0.0, 0.0, 0.0])
+probs = torch.softmax(logits, dim=0)       # [0.25, 0.25, 0.25, 0.25]
+loss = -probs[2].log()                     # 1.3863, whatever the label is</code></pre>
+<ul>
+<li>With equal logits the loss is the same for <b>every</b> label, so there is no luck involved.</li>
+<li>Random logits (<code>torch.randn(4)</code>) gave 2.11 in his run. Multiply them by 10 and you get extreme values and very high losses, even <b>inf</b>.</li>
+<li>We want logits <b>roughly zero</b> at initialisation. They only need to be <b>equal</b> (all ones would also be fine), but by symmetry we choose zeros.</li>
+</ul>
+<div class="oneline"><small>In one line</small>A net that is confidently wrong pays a huge loss; equal (near-zero) logits give the neutral loss.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c7" data-title="Where do the big logits come from?" data-num="7" data-track><header class="chead"><span class="num">7</span><h2>Where do the big logits come from?</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=540s" target="_blank" rel="noopener" title="Open the video at 9:00">&#9654; 9:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>logits[0]
+# tensor([-2.35, 36.44, -10.73, 5.72, 18.64, -11.70, ...
+#          -24.45, ... 25.87, ...])</code></pre>
+<p>On the screen the first row of logits has values like <b>36</b> and <b>-24</b>. That is the fake confidence in wrong answers.</p>
+<p>Logits are made by one line: <code>logits = h @ W2 + b2</code>. Two things to fix:</p>
+<ol>
+<li><b>b2</b> is random. We don't want to add a random bias, so start it at <b>zero</b>.</li>
+<li><b>W2</b> is large. Multiplying it by a small number makes the logits small.</li>
+</ol>
+<div class="oneline"><small>In one line</small>Logits are h @ W2 + b2, so shrink W2 and zero b2 to get small logits.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c8" data-title="Shrink the output layer" data-num="8" data-track><header class="chead"><span class="num">8</span><h2>Shrink the output layer</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=590s" target="_blank" rel="noopener" title="Open the video at 9:50">&#9654; 9:50</a></header><div class="body">
+<pre class="code" data-lang="python"><code>W2 = torch.randn((n_hidden, vocab_size), generator=g) * 0.01
+b2 = torch.randn(vocab_size, generator=g) * 0</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 760 232" role="img" aria-label="The starting loss before and after shrinking the output layer"><text class="t" x="10" y="22" text-anchor="start">Loss at the very start of training (lower is closer to what we expect)</text><text class="tm" x="10" y="75" text-anchor="start">untouched initialisation</text><rect class="bar warn" x="250" y="56" width="430.0" height="28" rx="5"/><text class="t" x="690.0" y="75" text-anchor="start">27.88</text><text class="tm" x="10" y="125" text-anchor="start">W2 × 0.1 and b2 = 0</text><rect class="bar info" x="250" y="106" width="65.2" height="28" rx="5"/><text class="t" x="325.2403156384505" y="125" text-anchor="start">4.23</text><text class="tm" x="10" y="175" text-anchor="start">W2 × 0.01 and b2 = 0</text><rect class="bar hot" x="250" y="156" width="51.2" height="28" rx="5"/><text class="t" x="311.2051649928264" y="175" text-anchor="start">3.32</text><line class="dash" x1="300.8" y1="44" x2="300.8" y2="206"/><text class="tm" x="308.8319225251076" y="218" text-anchor="start">expected: −ln(1/27) = 3.30</text></svg><figcaption>27.88 is way above the 3.30 you get from guessing uniformly. Shrinking the last layer fixes it.</figcaption></figure>
+<ul>
+<li>Scaling <code>W2</code> by 0.1 gave a first loss of about <b>4.2</b>. Scaling by 0.01 gave <b>3.32</b>, which is the 3.30 we wanted.</li>
+<li>Why not just set the weights to <b>exactly zero</b>? He is "very nervous" about setting a net's weights exactly to zero and promises to show why. For this one output layer he thinks it would be fine, but small random numbers are the habit.</li>
+<li>He says those small numbers give "some entropy" that is used for <b>symmetry breaking</b>.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Scale W2 by 0.01 and zero b2: the first loss drops from 27.88 to 3.32, matching the expected 3.30.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c9" data-title="No more hockey stick, and a better loss" data-num="9" data-track><header class="chead"><span class="num">9</span><h2>No more hockey stick, and a better loss</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=690s" target="_blank" rel="noopener" title="Open the video at 11:30">&#9654; 11:30</a></header><div class="body">
+<p>Remove the <code>break</code> and train for real. Two good things happen:</p>
+<ul>
+<li>The loss curve <b>no longer has a hockey-stick start</b>. That shape came from the first few thousand steps just squashing down the oversized weights. We removed that "easy part", so training goes straight to the hard, useful part.</li>
+<li>The final loss improves: <b>validation 2.17 → 2.13</b> (train about 2.07).</li>
+</ul>
+<p>The reason: we are not wasting early steps on shrinking weights, so more steps go to <b>actually learning</b>.</p>
+<p class="hint">A hockey-stick loss at the start is something to look out for in <b>any</b> network you train.</p>
+<div class="oneline"><small>In one line</small>Fixing the overconfident softmax removes the hockey stick and lowers validation loss from 2.17 to 2.13.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="t1" data-title="Test 1: the starting loss" data-num="T1" data-track><header class="chead"><span class="num">T1</span><h2>Test 1: the starting loss</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=780s" target="_blank" rel="noopener" title="Open the video at 13:00">&#9654; 13:00</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>For 27 characters, what starting loss should we expect and why?</span></summary><div class="ans">About 3.30. With no information every character has probability 1/27, and -ln(1/27) = 3.2958.</div></details><details class="q"><summary><span>What does a starting loss of 27.88 tell you?</span></summary><div class="ans">The initial logits are extreme, so the net is confidently wrong. The initialisation is bad.</div></details><details class="q"><summary><span>Why does a 4-way softmax with all-zero logits give 1.386 whatever the label?</span></summary><div class="ans">It outputs 0.25 for every class, so the loss is -ln(0.25) = 1.386 regardless of the true label.</div></details><details class="q"><summary><span>Which two things in the code make the first logits large, and how do you fix them?</span></summary><div class="ans">A random bias b2 and large weights W2. Set b2 to zero and scale W2 by a small number like 0.01.</div></details><details class="q"><summary><span>Why not make W2 exactly zero?</span></summary><div class="ans">Small random values keep a little entropy for symmetry breaking. He is nervous about exact zeros.</div></details><details class="q"><summary><span>What is the hockey-stick loss curve, and why did it vanish?</span></summary><div class="ans">A quick drop at the start while the optimiser squashes oversized weights. With sensible initial weights there is nothing to squash, so it disappears.</div></details><div class="oneline"><small>In one line</small>If you can answer these, Fix 1 is yours.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p2" data-short="Fix 2 · Saturated tanh"><div class="kicker">Part 2 · 13:00 – 28:00</div><h2>The hidden layer is saturated</h2><p>The logits are fine now, but the hidden layer still has a deeper problem.</p></section><section class="concept" id="c10" data-title="The second problem: tanh outputs are all ±1" data-num="10" data-track><header class="chead"><span class="num">10</span><h2>The second problem: tanh outputs are all ±1</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=780s" target="_blank" rel="noopener" title="Open the video at 13:00">&#9654; 13:00</a></header><div class="body">
+<p>The loss looks right, but look inside: the values of <code>h</code>, the hidden activations. Many of them are <b>1 or -1</b>.</p>
+<pre class="code" data-lang="python"><code>plt.hist(h.view(-1).tolist(), 50);        # all tanh outputs, in 50 bins</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 760 232" role="img" aria-label="Histogram of tanh outputs before and after the fix"><rect class="box" x="10" y="10" width="350" height="210" rx="12"/><text class="t" x="185" y="32" text-anchor="middle">Before: most outputs are ±1</text><text class="ts" x="185" y="206" text-anchor="middle">tanh outputs piled at the ends</text><rect class="bar warn" x="36.0" y="68.3" width="12.3" height="101.7" rx="2"/><rect class="bar warn" x="50.3" y="155.8" width="12.3" height="14.2" rx="2"/><rect class="bar warn" x="64.6" y="163.9" width="12.3" height="6.1" rx="2"/><rect class="bar warn" x="78.9" y="165.9" width="12.3" height="4.1" rx="2"/><rect class="bar warn" x="93.1" y="166.9" width="12.3" height="3.1" rx="2"/><rect class="bar warn" x="107.4" y="166.9" width="12.3" height="3.1" rx="2"/><rect class="bar warn" x="121.7" y="168.0" width="12.3" height="2.0" rx="2"/><rect class="bar warn" x="136.0" y="168.0" width="12.3" height="2.0" rx="2"/><rect class="bar warn" x="150.3" y="168.0" width="12.3" height="2.0" rx="2"/><rect class="bar warn" x="164.6" y="168.0" width="12.3" height="2.0" rx="2"/><rect class="bar warn" x="178.9" y="168.0" width="12.3" height="2.0" rx="2"/><rect class="bar warn" x="193.1" y="168.0" width="12.3" height="2.0" rx="2"/><rect class="bar warn" x="207.4" y="168.0" width="12.3" height="2.0" rx="2"/><rect class="bar warn" x="221.7" y="168.0" width="12.3" height="2.0" rx="2"/><rect class="bar warn" x="236.0" y="168.0" width="12.3" height="2.0" rx="2"/><rect class="bar warn" x="250.3" y="166.9" width="12.3" height="3.1" rx="2"/><rect class="bar warn" x="264.6" y="166.9" width="12.3" height="3.1" rx="2"/><rect class="bar warn" x="278.9" y="165.9" width="12.3" height="4.1" rx="2"/><rect class="bar warn" x="293.1" y="163.9" width="12.3" height="6.1" rx="2"/><rect class="bar warn" x="307.4" y="155.8" width="12.3" height="14.2" rx="2"/><rect class="bar warn" x="321.7" y="50.0" width="12.3" height="120.0" rx="2"/><text class="tmono" x="35" y="188" text-anchor="start">-1</text><text class="tmono" x="335" y="188" text-anchor="end">+1</text><text class="tmono" x="185" y="188" text-anchor="middle">0</text><rect class="box" x="400" y="10" width="350" height="210" rx="12"/><text class="t" x="575" y="32" text-anchor="middle">After: spread out</text><text class="ts" x="575" y="206" text-anchor="middle">tanh outputs mostly in the middle</text><rect class="bar hot" x="426.0" y="167.9" width="12.3" height="2.1" rx="2"/><rect class="bar hot" x="440.3" y="165.8" width="12.3" height="4.2" rx="2"/><rect class="bar hot" x="454.6" y="161.7" width="12.3" height="8.3" rx="2"/><rect class="bar hot" x="468.9" y="154.3" width="12.3" height="15.7" rx="2"/><rect class="bar hot" x="483.1" y="140.8" width="12.3" height="29.2" rx="2"/><rect class="bar hot" x="497.4" y="122.0" width="12.3" height="48.0" rx="2"/><rect class="bar hot" x="511.7" y="97.0" width="12.3" height="73.0" rx="2"/><rect class="bar hot" x="526.0" y="74.0" width="12.3" height="96.0" rx="2"/><rect class="bar hot" x="540.3" y="57.3" width="12.3" height="112.7" rx="2"/><rect class="bar hot" x="554.6" y="50.0" width="12.3" height="120.0" rx="2"/><rect class="bar hot" x="568.9" y="57.3" width="12.3" height="112.7" rx="2"/><rect class="bar hot" x="583.1" y="74.0" width="12.3" height="96.0" rx="2"/><rect class="bar hot" x="597.4" y="97.0" width="12.3" height="73.0" rx="2"/><rect class="bar hot" x="611.7" y="122.0" width="12.3" height="48.0" rx="2"/><rect class="bar hot" x="626.0" y="140.8" width="12.3" height="29.2" rx="2"/><rect class="bar hot" x="640.3" y="154.3" width="12.3" height="15.7" rx="2"/><rect class="bar hot" x="654.6" y="161.7" width="12.3" height="8.3" rx="2"/><rect class="bar hot" x="668.9" y="165.8" width="12.3" height="4.2" rx="2"/><rect class="bar hot" x="683.1" y="167.9" width="12.3" height="2.1" rx="2"/><rect class="bar hot" x="697.4" y="169.0" width="12.3" height="1.0" rx="2"/><rect class="bar hot" x="711.7" y="169.0" width="12.3" height="1.0" rx="2"/><text class="tmono" x="425" y="188" text-anchor="start">-1</text><text class="tmono" x="725" y="188" text-anchor="end">+1</text><text class="tmono" x="575" y="188" text-anchor="middle">0</text></svg><figcaption>Schematic, shaped like the two histograms he showed. The first has two big spikes at −1 and +1.</figcaption></figure>
+<ul>
+<li><code>tanh</code> squashes any number smoothly into the range <b>-1 to 1</b>.</li>
+<li>The histogram has two big spikes at the ends: the tanh is "very, very active".</li>
+<li>Why: the numbers going <b>into</b> tanh (the pre-activations) are very broad, about <b>-5 to 15</b>, so everything gets squashed to the ends.</li>
+</ul>
+<div class="oneline"><small>In one line</small>If the pre-activations are too wide, tanh pushes almost every output to -1 or +1.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c11" data-title="Why a saturated tanh kills the gradient" data-num="11" data-track><header class="chead"><span class="num">11</span><h2>Why a saturated tanh kills the gradient</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=900s" target="_blank" rel="noopener" title="Open the video at 15:00">&#9654; 15:00</a></header><div class="body">
+<p>If you know how gradients flow, this histogram makes you <b>sweat</b>. Recall tanh in micrograd:</p>
+<pre class="code" data-lang="python"><code>def tanh(self):
+    t = (math.exp(2*x) - 1) / (math.exp(2*x) + 1)
+    out = Value(t, (self,), 'tanh')
+    def _backward():
+        self.grad += (1 - t**2) * out.grad       # chain rule</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 760 246" role="img" aria-label="tanh and its gradient factor"><text class="t" x="200" y="18" text-anchor="middle">tanh(x): the output</text><text class="t" x="580" y="18" text-anchor="middle">gradient factor 1 − t²</text><line class="axis" x1="40" y1="110" x2="360" y2="110"/><rect class="shade" x="40.0" y="36" width="72.0" height="148"/><rect class="shade" x="288.0" y="36" width="72.0" height="148"/><polyline class="curve" points="40.0,180.0 44.0,179.9 48.0,179.9 52.0,179.9 56.0,179.9 60.0,179.9 64.0,179.8 68.0,179.8 72.0,179.8 76.0,179.7 80.0,179.7 84.0,179.6 88.0,179.5 92.0,179.4 96.0,179.2 100.0,179.1 104.0,178.9 108.0,178.6 112.0,178.3 116.0,177.9 120.0,177.5 124.0,176.9 128.0,176.3 132.0,175.5 136.0,174.5 140.0,173.4 144.0,172.0 148.0,170.3 152.0,168.4 156.0,166.0 160.0,163.3 164.0,160.1 168.0,156.5 172.0,152.3 176.0,147.6 180.0,142.3 184.0,136.6 188.0,130.4 192.0,123.8 196.0,117.0 200.0,110.0 204.0,103.0 208.0,96.2 212.0,89.6 216.0,83.4 220.0,77.7 224.0,72.4 228.0,67.7 232.0,63.5 236.0,59.9 240.0,56.7 244.0,54.0 248.0,51.6 252.0,49.7 256.0,48.0 260.0,46.6 264.0,45.5 268.0,44.5 272.0,43.7 276.0,43.1 280.0,42.5 284.0,42.1 288.0,41.7 292.0,41.4 296.0,41.1 300.0,40.9 304.0,40.8 308.0,40.6 312.0,40.5 316.0,40.4 320.0,40.3 324.0,40.3 328.0,40.2 332.0,40.2 336.0,40.2 340.0,40.1 344.0,40.1 348.0,40.1 352.0,40.1 356.0,40.1 360.0,40.0"/><text class="tm" x="76.0" y="156" text-anchor="middle">flat</text><text class="tm" x="324.0" y="70" text-anchor="middle">flat</text><text class="ts" x="208.0" y="104" text-anchor="start">x = 0</text><line class="axis" x1="420" y1="184" x2="740" y2="184"/><rect class="shade" x="420.0" y="36" width="72.0" height="148"/><rect class="shade" x="668.0" y="36" width="72.0" height="148"/><polyline class="curve info" points="420.0,183.8 424.0,183.8 428.0,183.7 432.0,183.7 436.0,183.6 440.0,183.5 444.0,183.4 448.0,183.3 452.0,183.1 456.0,182.9 460.0,182.7 464.0,182.4 468.0,182.1 472.0,181.7 476.0,181.2 480.0,180.5 484.0,179.8 488.0,178.9 492.0,177.8 496.0,176.4 500.0,174.8 504.0,172.9 508.0,170.5 512.0,167.7 516.0,164.4 520.0,160.5 524.0,155.9 528.0,150.5 532.0,144.3 536.0,137.3 540.0,129.4 544.0,120.7 548.0,111.3 552.0,101.5 556.0,91.5 560.0,81.8 564.0,72.8 568.0,65.0 572.0,59.1 576.0,55.3 580.0,54.0 584.0,55.3 588.0,59.1 592.0,65.0 596.0,72.8 600.0,81.8 604.0,91.5 608.0,101.5 612.0,111.3 616.0,120.7 620.0,129.4 624.0,137.3 628.0,144.3 632.0,150.5 636.0,155.9 640.0,160.5 644.0,164.4 648.0,167.7 652.0,170.5 656.0,172.9 660.0,174.8 664.0,176.4 668.0,177.8 672.0,178.9 676.0,179.8 680.0,180.5 684.0,181.2 688.0,181.7 692.0,182.1 696.0,182.4 700.0,182.7 704.0,182.9 708.0,183.1 712.0,183.3 716.0,183.4 720.0,183.5 724.0,183.6 728.0,183.7 732.0,183.7 736.0,183.8 740.0,183.8"/><text class="tm" x="580.0" y="40" text-anchor="middle">t = 0 → ×1 (gradient passes)</text><text class="t" x="456.0" y="170" text-anchor="middle">×0</text><text class="t" x="704.0" y="170" text-anchor="middle">×0</text><text class="tm" x="380" y="214" text-anchor="middle">Shaded: the flat tails. A neuron sitting there passes almost no gradient back.</text><text class="ts" x="380" y="234" text-anchor="middle">The factor can only shrink the gradient (it is never above 1), and it is exactly 1 only at 0.</text></svg><figcaption>In the backward pass the gradient is multiplied by (1 − t²), which is 0 when t is ±1.</figcaption></figure>
+<ul>
+<li>The incoming gradient is multiplied by <b>1 − t²</b>.</li>
+<li>If <b>t = ±1</b>, the factor is <b>0</b>: the gradient stops, "no matter what out.grad is".</li>
+<li>If <b>t = 0</b>, the factor is 1: the gradient passes straight through.</li>
+<li>Intuition: in a flat tail, changing the input hardly changes the output, so it has <b>no effect on the loss</b>. Zero gradient is the right answer.</li>
+<li>The gradient through tanh can <b>only shrink</b>, and more the deeper you are in a tail.</li>
+</ul>
+<div class="oneline"><small>In one line</small>A tanh in its flat tail multiplies the gradient by about zero, so the neurons below it learn nothing.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c12" data-title="See it: the white map" data-num="12" data-track><header class="chead"><span class="num">12</span><h2>See it: the white map</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=1110s" target="_blank" rel="noopener" title="Open the video at 18:30">&#9654; 18:30</a></header><div class="body">
+<pre class="code" data-lang="python"><code>plt.figure(figsize=(20, 10))
+plt.imshow(h.abs() &gt; 0.99, cmap='gray', interpolation='nearest')</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 760 306" role="img" aria-label="Saturation map of the hidden layer"><text class="t" x="20" y="24" text-anchor="start">h.abs() &gt; 0.99  for 14 examples × 34 neurons (a small sketch)</text><rect class="cellb" x="20" y="40" width="15" height="15"/><rect class="cellb" x="35" y="40" width="15" height="15"/><rect class="cellb" x="50" y="40" width="15" height="15"/><rect class="cellb" x="65" y="40" width="15" height="15"/><rect class="cellb" x="80" y="40" width="15" height="15"/><rect class="cellb" x="95" y="40" width="15" height="15"/><rect class="cellw" x="110" y="40" width="15" height="15"/><rect class="cellb" x="125" y="40" width="15" height="15"/><rect class="cellb" x="140" y="40" width="15" height="15"/><rect class="cellb" x="155" y="40" width="15" height="15"/><rect class="cellb" x="170" y="40" width="15" height="15"/><rect class="cellw" x="185" y="40" width="15" height="15"/><rect class="cellb" x="200" y="40" width="15" height="15"/><rect class="cellw" x="215" y="40" width="15" height="15"/><rect class="cellb" x="230" y="40" width="15" height="15"/><rect class="cellb" x="245" y="40" width="15" height="15"/><rect class="cellw" x="260" y="40" width="15" height="15"/><rect class="cellw" x="275" y="40" width="15" height="15"/><rect class="cellw" x="290" y="40" width="15" height="15"/><rect class="cellb" x="305" y="40" width="15" height="15"/><rect class="cellb" x="320" y="40" width="15" height="15"/><rect class="cellw" x="335" y="40" width="15" height="15"/><rect class="cellw" x="350" y="40" width="15" height="15"/><rect class="cellb" x="365" y="40" width="15" height="15"/><rect class="cellw" x="380" y="40" width="15" height="15"/><rect class="cellb" x="395" y="40" width="15" height="15"/><rect class="cellw" x="410" y="40" width="15" height="15"/><rect class="cellw" x="425" y="40" width="15" height="15"/><rect class="cellb" x="440" y="40" width="15" height="15"/><rect class="cellw" x="455" y="40" width="15" height="15"/><rect class="cellw" x="470" y="40" width="15" height="15"/><rect class="cellb" x="485" y="40" width="15" height="15"/><rect class="cellb" x="500" y="40" width="15" height="15"/><rect class="cellw" x="515" y="40" width="15" height="15"/><rect class="cellb" x="20" y="55" width="15" height="15"/><rect class="cellb" x="35" y="55" width="15" height="15"/><rect class="cellb" x="50" y="55" width="15" height="15"/><rect class="cellw" x="65" y="55" width="15" height="15"/><rect class="cellb" x="80" y="55" width="15" height="15"/><rect class="cellb" x="95" y="55" width="15" height="15"/><rect class="cellb" x="110" y="55" width="15" height="15"/><rect class="cellb" x="125" y="55" width="15" height="15"/><rect class="cellw" x="140" y="55" width="15" height="15"/><rect class="cellw" x="155" y="55" width="15" height="15"/><rect class="cellw" x="170" y="55" width="15" height="15"/><rect class="cellw" x="185" y="55" width="15" height="15"/><rect class="cellw" x="200" y="55" width="15" height="15"/><rect class="cellw" x="215" y="55" width="15" height="15"/><rect class="cellb" x="230" y="55" width="15" height="15"/><rect class="cellw" x="245" y="55" width="15" height="15"/><rect class="cellb" x="260" y="55" width="15" height="15"/><rect class="cellw" x="275" y="55" width="15" height="15"/><rect class="cellw" x="290" y="55" width="15" height="15"/><rect class="cellb" x="305" y="55" width="15" height="15"/><rect class="cellb" x="320" y="55" width="15" height="15"/><rect class="cellw" x="335" y="55" width="15" height="15"/><rect class="cellw" x="350" y="55" width="15" height="15"/><rect class="cellb" x="365" y="55" width="15" height="15"/><rect class="cellb" x="380" y="55" width="15" height="15"/><rect class="cellw" x="395" y="55" width="15" height="15"/><rect class="cellb" x="410" y="55" width="15" height="15"/><rect class="cellw" x="425" y="55" width="15" height="15"/><rect class="cellb" x="440" y="55" width="15" height="15"/><rect class="cellb" x="455" y="55" width="15" height="15"/><rect class="cellw" x="470" y="55" width="15" height="15"/><rect class="cellb" x="485" y="55" width="15" height="15"/><rect class="cellw" x="500" y="55" width="15" height="15"/><rect class="cellb" x="515" y="55" width="15" height="15"/><rect class="cellw" x="20" y="70" width="15" height="15"/><rect class="cellw" x="35" y="70" width="15" height="15"/><rect class="cellw" x="50" y="70" width="15" height="15"/><rect class="cellb" x="65" y="70" width="15" height="15"/><rect class="cellw" x="80" y="70" width="15" height="15"/><rect class="cellb" x="95" y="70" width="15" height="15"/><rect class="cellb" x="110" y="70" width="15" height="15"/><rect class="cellb" x="125" y="70" width="15" height="15"/><rect class="cellw" x="140" y="70" width="15" height="15"/><rect class="cellw" x="155" y="70" width="15" height="15"/><rect class="cellb" x="170" y="70" width="15" height="15"/><rect class="cellb" x="185" y="70" width="15" height="15"/><rect class="cellw" x="200" y="70" width="15" height="15"/><rect class="cellb" x="215" y="70" width="15" height="15"/><rect class="cellb" x="230" y="70" width="15" height="15"/><rect class="cellb" x="245" y="70" width="15" height="15"/><rect class="cellw" x="260" y="70" width="15" height="15"/><rect class="cellb" x="275" y="70" width="15" height="15"/><rect class="cellw" x="290" y="70" width="15" height="15"/><rect class="cellw" x="305" y="70" width="15" height="15"/><rect class="cellb" x="320" y="70" width="15" height="15"/><rect class="cellb" x="335" y="70" width="15" height="15"/><rect class="cellw" x="350" y="70" width="15" height="15"/><rect class="cellw" x="365" y="70" width="15" height="15"/><rect class="cellb" x="380" y="70" width="15" height="15"/><rect class="cellb" x="395" y="70" width="15" height="15"/><rect class="cellw" x="410" y="70" width="15" height="15"/><rect class="cellw" x="425" y="70" width="15" height="15"/><rect class="cellw" x="440" y="70" width="15" height="15"/><rect class="cellw" x="455" y="70" width="15" height="15"/><rect class="cellw" x="470" y="70" width="15" height="15"/><rect class="cellb" x="485" y="70" width="15" height="15"/><rect class="cellb" x="500" y="70" width="15" height="15"/><rect class="cellw" x="515" y="70" width="15" height="15"/><rect class="cellw" x="20" y="85" width="15" height="15"/><rect class="cellb" x="35" y="85" width="15" height="15"/><rect class="cellb" x="50" y="85" width="15" height="15"/><rect class="cellw" x="65" y="85" width="15" height="15"/><rect class="cellw" x="80" y="85" width="15" height="15"/><rect class="cellb" x="95" y="85" width="15" height="15"/><rect class="cellb" x="110" y="85" width="15" height="15"/><rect class="cellb" x="125" y="85" width="15" height="15"/><rect class="cellb" x="140" y="85" width="15" height="15"/><rect class="cellw" x="155" y="85" width="15" height="15"/><rect class="cellb" x="170" y="85" width="15" height="15"/><rect class="cellw" x="185" y="85" width="15" height="15"/><rect class="cellb" x="200" y="85" width="15" height="15"/><rect class="cellb" x="215" y="85" width="15" height="15"/><rect class="cellw" x="230" y="85" width="15" height="15"/><rect class="cellb" x="245" y="85" width="15" height="15"/><rect class="cellb" x="260" y="85" width="15" height="15"/><rect class="cellb" x="275" y="85" width="15" height="15"/><rect class="cellb" x="290" y="85" width="15" height="15"/><rect class="cellw" x="305" y="85" width="15" height="15"/><rect class="cellb" x="320" y="85" width="15" height="15"/><rect class="cellw" x="335" y="85" width="15" height="15"/><rect class="cellw" x="350" y="85" width="15" height="15"/><rect class="cellb" x="365" y="85" width="15" height="15"/><rect class="cellw" x="380" y="85" width="15" height="15"/><rect class="cellb" x="395" y="85" width="15" height="15"/><rect class="cellb" x="410" y="85" width="15" height="15"/><rect class="cellb" x="425" y="85" width="15" height="15"/><rect class="cellb" x="440" y="85" width="15" height="15"/><rect class="cellb" x="455" y="85" width="15" height="15"/><rect class="cellb" x="470" y="85" width="15" height="15"/><rect class="cellb" x="485" y="85" width="15" height="15"/><rect class="cellb" x="500" y="85" width="15" height="15"/><rect class="cellw" x="515" y="85" width="15" height="15"/><rect class="cellw" x="20" y="100" width="15" height="15"/><rect class="cellw" x="35" y="100" width="15" height="15"/><rect class="cellw" x="50" y="100" width="15" height="15"/><rect class="cellb" x="65" y="100" width="15" height="15"/><rect class="cellb" x="80" y="100" width="15" height="15"/><rect class="cellb" x="95" y="100" width="15" height="15"/><rect class="cellb" x="110" y="100" width="15" height="15"/><rect class="cellw" x="125" y="100" width="15" height="15"/><rect class="cellw" x="140" y="100" width="15" height="15"/><rect class="cellw" x="155" y="100" width="15" height="15"/><rect class="cellb" x="170" y="100" width="15" height="15"/><rect class="cellb" x="185" y="100" width="15" height="15"/><rect class="cellw" x="200" y="100" width="15" height="15"/><rect class="cellb" x="215" y="100" width="15" height="15"/><rect class="cellb" x="230" y="100" width="15" height="15"/><rect class="cellb" x="245" y="100" width="15" height="15"/><rect class="cellb" x="260" y="100" width="15" height="15"/><rect class="cellb" x="275" y="100" width="15" height="15"/><rect class="cellw" x="290" y="100" width="15" height="15"/><rect class="cellb" x="305" y="100" width="15" height="15"/><rect class="cellw" x="320" y="100" width="15" height="15"/><rect class="cellb" x="335" y="100" width="15" height="15"/><rect class="cellw" x="350" y="100" width="15" height="15"/><rect class="cellb" x="365" y="100" width="15" height="15"/><rect class="cellb" x="380" y="100" width="15" height="15"/><rect class="cellw" x="395" y="100" width="15" height="15"/><rect class="cellb" x="410" y="100" width="15" height="15"/><rect class="cellb" x="425" y="100" width="15" height="15"/><rect class="cellb" x="440" y="100" width="15" height="15"/><rect class="cellw" x="455" y="100" width="15" height="15"/><rect class="cellb" x="470" y="100" width="15" height="15"/><rect class="cellw" x="485" y="100" width="15" height="15"/><rect class="cellb" x="500" y="100" width="15" height="15"/><rect class="cellb" x="515" y="100" width="15" height="15"/><rect class="cellb" x="20" y="115" width="15" height="15"/><rect class="cellb" x="35" y="115" width="15" height="15"/><rect class="cellb" x="50" y="115" width="15" height="15"/><rect class="cellw" x="65" y="115" width="15" height="15"/><rect class="cellb" x="80" y="115" width="15" height="15"/><rect class="cellb" x="95" y="115" width="15" height="15"/><rect class="cellb" x="110" y="115" width="15" height="15"/><rect class="cellw" x="125" y="115" width="15" height="15"/><rect class="cellb" x="140" y="115" width="15" height="15"/><rect class="cellb" x="155" y="115" width="15" height="15"/><rect class="cellb" x="170" y="115" width="15" height="15"/><rect class="cellb" x="185" y="115" width="15" height="15"/><rect class="cellb" x="200" y="115" width="15" height="15"/><rect class="cellb" x="215" y="115" width="15" height="15"/><rect class="cellb" x="230" y="115" width="15" height="15"/><rect class="cellw" x="245" y="115" width="15" height="15"/><rect class="cellb" x="260" y="115" width="15" height="15"/><rect class="cellb" x="275" y="115" width="15" height="15"/><rect class="cellb" x="290" y="115" width="15" height="15"/><rect class="cellb" x="305" y="115" width="15" height="15"/><rect class="cellb" x="320" y="115" width="15" height="15"/><rect class="cellb" x="335" y="115" width="15" height="15"/><rect class="cellw" x="350" y="115" width="15" height="15"/><rect class="cellw" x="365" y="115" width="15" height="15"/><rect class="cellb" x="380" y="115" width="15" height="15"/><rect class="cellb" x="395" y="115" width="15" height="15"/><rect class="cellb" x="410" y="115" width="15" height="15"/><rect class="cellb" x="425" y="115" width="15" height="15"/><rect class="cellb" x="440" y="115" width="15" height="15"/><rect class="cellb" x="455" y="115" width="15" height="15"/><rect class="cellb" x="470" y="115" width="15" height="15"/><rect class="cellb" x="485" y="115" width="15" height="15"/><rect class="cellw" x="500" y="115" width="15" height="15"/><rect class="cellw" x="515" y="115" width="15" height="15"/><rect class="cellb" x="20" y="130" width="15" height="15"/><rect class="cellb" x="35" y="130" width="15" height="15"/><rect class="cellw" x="50" y="130" width="15" height="15"/><rect class="cellb" x="65" y="130" width="15" height="15"/><rect class="cellb" x="80" y="130" width="15" height="15"/><rect class="cellw" x="95" y="130" width="15" height="15"/><rect class="cellb" x="110" y="130" width="15" height="15"/><rect class="cellw" x="125" y="130" width="15" height="15"/><rect class="cellw" x="140" y="130" width="15" height="15"/><rect class="cellw" x="155" y="130" width="15" height="15"/><rect class="cellw" x="170" y="130" width="15" height="15"/><rect class="cellw" x="185" y="130" width="15" height="15"/><rect class="cellw" x="200" y="130" width="15" height="15"/><rect class="cellw" x="215" y="130" width="15" height="15"/><rect class="cellb" x="230" y="130" width="15" height="15"/><rect class="cellw" x="245" y="130" width="15" height="15"/><rect class="cellb" x="260" y="130" width="15" height="15"/><rect class="cellb" x="275" y="130" width="15" height="15"/><rect class="cellw" x="290" y="130" width="15" height="15"/><rect class="cellb" x="305" y="130" width="15" height="15"/><rect class="cellw" x="320" y="130" width="15" height="15"/><rect class="cellw" x="335" y="130" width="15" height="15"/><rect class="cellw" x="350" y="130" width="15" height="15"/><rect class="cellw" x="365" y="130" width="15" height="15"/><rect class="cellw" x="380" y="130" width="15" height="15"/><rect class="cellw" x="395" y="130" width="15" height="15"/><rect class="cellb" x="410" y="130" width="15" height="15"/><rect class="cellw" x="425" y="130" width="15" height="15"/><rect class="cellw" x="440" y="130" width="15" height="15"/><rect class="cellb" x="455" y="130" width="15" height="15"/><rect class="cellw" x="470" y="130" width="15" height="15"/><rect class="cellb" x="485" y="130" width="15" height="15"/><rect class="cellw" x="500" y="130" width="15" height="15"/><rect class="cellb" x="515" y="130" width="15" height="15"/><rect class="cellb" x="20" y="145" width="15" height="15"/><rect class="cellb" x="35" y="145" width="15" height="15"/><rect class="cellw" x="50" y="145" width="15" height="15"/><rect class="cellb" x="65" y="145" width="15" height="15"/><rect class="cellb" x="80" y="145" width="15" height="15"/><rect class="cellw" x="95" y="145" width="15" height="15"/><rect class="cellw" x="110" y="145" width="15" height="15"/><rect class="cellb" x="125" y="145" width="15" height="15"/><rect class="cellb" x="140" y="145" width="15" height="15"/><rect class="cellb" x="155" y="145" width="15" height="15"/><rect class="cellb" x="170" y="145" width="15" height="15"/><rect class="cellb" x="185" y="145" width="15" height="15"/><rect class="cellw" x="200" y="145" width="15" height="15"/><rect class="cellb" x="215" y="145" width="15" height="15"/><rect class="cellw" x="230" y="145" width="15" height="15"/><rect class="cellw" x="245" y="145" width="15" height="15"/><rect class="cellb" x="260" y="145" width="15" height="15"/><rect class="cellb" x="275" y="145" width="15" height="15"/><rect class="cellw" x="290" y="145" width="15" height="15"/><rect class="cellb" x="305" y="145" width="15" height="15"/><rect class="cellb" x="320" y="145" width="15" height="15"/><rect class="cellw" x="335" y="145" width="15" height="15"/><rect class="cellw" x="350" y="145" width="15" height="15"/><rect class="cellb" x="365" y="145" width="15" height="15"/><rect class="cellw" x="380" y="145" width="15" height="15"/><rect class="cellw" x="395" y="145" width="15" height="15"/><rect class="cellb" x="410" y="145" width="15" height="15"/><rect class="cellw" x="425" y="145" width="15" height="15"/><rect class="cellb" x="440" y="145" width="15" height="15"/><rect class="cellb" x="455" y="145" width="15" height="15"/><rect class="cellb" x="470" y="145" width="15" height="15"/><rect class="cellw" x="485" y="145" width="15" height="15"/><rect class="cellb" x="500" y="145" width="15" height="15"/><rect class="cellb" x="515" y="145" width="15" height="15"/><rect class="cellw" x="20" y="160" width="15" height="15"/><rect class="cellw" x="35" y="160" width="15" height="15"/><rect class="cellb" x="50" y="160" width="15" height="15"/><rect class="cellb" x="65" y="160" width="15" height="15"/><rect class="cellw" x="80" y="160" width="15" height="15"/><rect class="cellb" x="95" y="160" width="15" height="15"/><rect class="cellw" x="110" y="160" width="15" height="15"/><rect class="cellb" x="125" y="160" width="15" height="15"/><rect class="cellb" x="140" y="160" width="15" height="15"/><rect class="cellw" x="155" y="160" width="15" height="15"/><rect class="cellb" x="170" y="160" width="15" height="15"/><rect class="cellb" x="185" y="160" width="15" height="15"/><rect class="cellw" x="200" y="160" width="15" height="15"/><rect class="cellb" x="215" y="160" width="15" height="15"/><rect class="cellw" x="230" y="160" width="15" height="15"/><rect class="cellb" x="245" y="160" width="15" height="15"/><rect class="cellb" x="260" y="160" width="15" height="15"/><rect class="cellw" x="275" y="160" width="15" height="15"/><rect class="cellw" x="290" y="160" width="15" height="15"/><rect class="cellw" x="305" y="160" width="15" height="15"/><rect class="cellb" x="320" y="160" width="15" height="15"/><rect class="cellw" x="335" y="160" width="15" height="15"/><rect class="cellw" x="350" y="160" width="15" height="15"/><rect class="cellb" x="365" y="160" width="15" height="15"/><rect class="cellb" x="380" y="160" width="15" height="15"/><rect class="cellb" x="395" y="160" width="15" height="15"/><rect class="cellb" x="410" y="160" width="15" height="15"/><rect class="cellb" x="425" y="160" width="15" height="15"/><rect class="cellw" x="440" y="160" width="15" height="15"/><rect class="cellb" x="455" y="160" width="15" height="15"/><rect class="cellw" x="470" y="160" width="15" height="15"/><rect class="cellb" x="485" y="160" width="15" height="15"/><rect class="cellw" x="500" y="160" width="15" height="15"/><rect class="cellw" x="515" y="160" width="15" height="15"/><rect class="cellb" x="20" y="175" width="15" height="15"/><rect class="cellb" x="35" y="175" width="15" height="15"/><rect class="cellw" x="50" y="175" width="15" height="15"/><rect class="cellb" x="65" y="175" width="15" height="15"/><rect class="cellb" x="80" y="175" width="15" height="15"/><rect class="cellw" x="95" y="175" width="15" height="15"/><rect class="cellw" x="110" y="175" width="15" height="15"/><rect class="cellb" x="125" y="175" width="15" height="15"/><rect class="cellb" x="140" y="175" width="15" height="15"/><rect class="cellb" x="155" y="175" width="15" height="15"/><rect class="cellb" x="170" y="175" width="15" height="15"/><rect class="cellw" x="185" y="175" width="15" height="15"/><rect class="cellb" x="200" y="175" width="15" height="15"/><rect class="cellb" x="215" y="175" width="15" height="15"/><rect class="cellb" x="230" y="175" width="15" height="15"/><rect class="cellb" x="245" y="175" width="15" height="15"/><rect class="cellb" x="260" y="175" width="15" height="15"/><rect class="cellb" x="275" y="175" width="15" height="15"/><rect class="cellb" x="290" y="175" width="15" height="15"/><rect class="cellw" x="305" y="175" width="15" height="15"/><rect class="cellw" x="320" y="175" width="15" height="15"/><rect class="cellb" x="335" y="175" width="15" height="15"/><rect class="cellw" x="350" y="175" width="15" height="15"/><rect class="cellw" x="365" y="175" width="15" height="15"/><rect class="cellw" x="380" y="175" width="15" height="15"/><rect class="cellb" x="395" y="175" width="15" height="15"/><rect class="cellw" x="410" y="175" width="15" height="15"/><rect class="cellb" x="425" y="175" width="15" height="15"/><rect class="cellb" x="440" y="175" width="15" height="15"/><rect class="cellb" x="455" y="175" width="15" height="15"/><rect class="cellw" x="470" y="175" width="15" height="15"/><rect class="cellb" x="485" y="175" width="15" height="15"/><rect class="cellb" x="500" y="175" width="15" height="15"/><rect class="cellw" x="515" y="175" width="15" height="15"/><rect class="cellb" x="20" y="190" width="15" height="15"/><rect class="cellb" x="35" y="190" width="15" height="15"/><rect class="cellb" x="50" y="190" width="15" height="15"/><rect class="cellw" x="65" y="190" width="15" height="15"/><rect class="cellw" x="80" y="190" width="15" height="15"/><rect class="cellb" x="95" y="190" width="15" height="15"/><rect class="cellb" x="110" y="190" width="15" height="15"/><rect class="cellw" x="125" y="190" width="15" height="15"/><rect class="cellw" x="140" y="190" width="15" height="15"/><rect class="cellb" x="155" y="190" width="15" height="15"/><rect class="cellb" x="170" y="190" width="15" height="15"/><rect class="cellb" x="185" y="190" width="15" height="15"/><rect class="cellw" x="200" y="190" width="15" height="15"/><rect class="cellb" x="215" y="190" width="15" height="15"/><rect class="cellb" x="230" y="190" width="15" height="15"/><rect class="cellb" x="245" y="190" width="15" height="15"/><rect class="cellb" x="260" y="190" width="15" height="15"/><rect class="cellw" x="275" y="190" width="15" height="15"/><rect class="cellb" x="290" y="190" width="15" height="15"/><rect class="cellw" x="305" y="190" width="15" height="15"/><rect class="cellb" x="320" y="190" width="15" height="15"/><rect class="cellb" x="335" y="190" width="15" height="15"/><rect class="cellw" x="350" y="190" width="15" height="15"/><rect class="cellb" x="365" y="190" width="15" height="15"/><rect class="cellw" x="380" y="190" width="15" height="15"/><rect class="cellw" x="395" y="190" width="15" height="15"/><rect class="cellb" x="410" y="190" width="15" height="15"/><rect class="cellw" x="425" y="190" width="15" height="15"/><rect class="cellb" x="440" y="190" width="15" height="15"/><rect class="cellw" x="455" y="190" width="15" height="15"/><rect class="cellw" x="470" y="190" width="15" height="15"/><rect class="cellb" x="485" y="190" width="15" height="15"/><rect class="cellw" x="500" y="190" width="15" height="15"/><rect class="cellw" x="515" y="190" width="15" height="15"/><rect class="cellw" x="20" y="205" width="15" height="15"/><rect class="cellw" x="35" y="205" width="15" height="15"/><rect class="cellw" x="50" y="205" width="15" height="15"/><rect class="cellb" x="65" y="205" width="15" height="15"/><rect class="cellb" x="80" y="205" width="15" height="15"/><rect class="cellb" x="95" y="205" width="15" height="15"/><rect class="cellw" x="110" y="205" width="15" height="15"/><rect class="cellb" x="125" y="205" width="15" height="15"/><rect class="cellw" x="140" y="205" width="15" height="15"/><rect class="cellb" x="155" y="205" width="15" height="15"/><rect class="cellb" x="170" y="205" width="15" height="15"/><rect class="cellb" x="185" y="205" width="15" height="15"/><rect class="cellw" x="200" y="205" width="15" height="15"/><rect class="cellw" x="215" y="205" width="15" height="15"/><rect class="cellb" x="230" y="205" width="15" height="15"/><rect class="cellw" x="245" y="205" width="15" height="15"/><rect class="cellb" x="260" y="205" width="15" height="15"/><rect class="cellb" x="275" y="205" width="15" height="15"/><rect class="cellb" x="290" y="205" width="15" height="15"/><rect class="cellb" x="305" y="205" width="15" height="15"/><rect class="cellb" x="320" y="205" width="15" height="15"/><rect class="cellw" x="335" y="205" width="15" height="15"/><rect class="cellw" x="350" y="205" width="15" height="15"/><rect class="cellb" x="365" y="205" width="15" height="15"/><rect class="cellw" x="380" y="205" width="15" height="15"/><rect class="cellb" x="395" y="205" width="15" height="15"/><rect class="cellb" x="410" y="205" width="15" height="15"/><rect class="cellw" x="425" y="205" width="15" height="15"/><rect class="cellw" x="440" y="205" width="15" height="15"/><rect class="cellw" x="455" y="205" width="15" height="15"/><rect class="cellb" x="470" y="205" width="15" height="15"/><rect class="cellw" x="485" y="205" width="15" height="15"/><rect class="cellb" x="500" y="205" width="15" height="15"/><rect class="cellb" x="515" y="205" width="15" height="15"/><rect class="cellw" x="20" y="220" width="15" height="15"/><rect class="cellb" x="35" y="220" width="15" height="15"/><rect class="cellw" x="50" y="220" width="15" height="15"/><rect class="cellw" x="65" y="220" width="15" height="15"/><rect class="cellb" x="80" y="220" width="15" height="15"/><rect class="cellw" x="95" y="220" width="15" height="15"/><rect class="cellb" x="110" y="220" width="15" height="15"/><rect class="cellb" x="125" y="220" width="15" height="15"/><rect class="cellw" x="140" y="220" width="15" height="15"/><rect class="cellb" x="155" y="220" width="15" height="15"/><rect class="cellw" x="170" y="220" width="15" height="15"/><rect class="cellb" x="185" y="220" width="15" height="15"/><rect class="cellw" x="200" y="220" width="15" height="15"/><rect class="cellw" x="215" y="220" width="15" height="15"/><rect class="cellb" x="230" y="220" width="15" height="15"/><rect class="cellb" x="245" y="220" width="15" height="15"/><rect class="cellw" x="260" y="220" width="15" height="15"/><rect class="cellw" x="275" y="220" width="15" height="15"/><rect class="cellb" x="290" y="220" width="15" height="15"/><rect class="cellb" x="305" y="220" width="15" height="15"/><rect class="cellb" x="320" y="220" width="15" height="15"/><rect class="cellw" x="335" y="220" width="15" height="15"/><rect class="cellw" x="350" y="220" width="15" height="15"/><rect class="cellb" x="365" y="220" width="15" height="15"/><rect class="cellw" x="380" y="220" width="15" height="15"/><rect class="cellw" x="395" y="220" width="15" height="15"/><rect class="cellw" x="410" y="220" width="15" height="15"/><rect class="cellb" x="425" y="220" width="15" height="15"/><rect class="cellw" x="440" y="220" width="15" height="15"/><rect class="cellw" x="455" y="220" width="15" height="15"/><rect class="cellw" x="470" y="220" width="15" height="15"/><rect class="cellb" x="485" y="220" width="15" height="15"/><rect class="cellb" x="500" y="220" width="15" height="15"/><rect class="cellb" x="515" y="220" width="15" height="15"/><rect class="cellb" x="20" y="235" width="15" height="15"/><rect class="cellb" x="35" y="235" width="15" height="15"/><rect class="cellb" x="50" y="235" width="15" height="15"/><rect class="cellb" x="65" y="235" width="15" height="15"/><rect class="cellb" x="80" y="235" width="15" height="15"/><rect class="cellb" x="95" y="235" width="15" height="15"/><rect class="cellw" x="110" y="235" width="15" height="15"/><rect class="cellw" x="125" y="235" width="15" height="15"/><rect class="cellw" x="140" y="235" width="15" height="15"/><rect class="cellw" x="155" y="235" width="15" height="15"/><rect class="cellw" x="170" y="235" width="15" height="15"/><rect class="cellb" x="185" y="235" width="15" height="15"/><rect class="cellb" x="200" y="235" width="15" height="15"/><rect class="cellb" x="215" y="235" width="15" height="15"/><rect class="cellw" x="230" y="235" width="15" height="15"/><rect class="cellb" x="245" y="235" width="15" height="15"/><rect class="cellb" x="260" y="235" width="15" height="15"/><rect class="cellb" x="275" y="235" width="15" height="15"/><rect class="cellb" x="290" y="235" width="15" height="15"/><rect class="cellb" x="305" y="235" width="15" height="15"/><rect class="cellw" x="320" y="235" width="15" height="15"/><rect class="cellw" x="335" y="235" width="15" height="15"/><rect class="cellw" x="350" y="235" width="15" height="15"/><rect class="cellw" x="365" y="235" width="15" height="15"/><rect class="cellw" x="380" y="235" width="15" height="15"/><rect class="cellw" x="395" y="235" width="15" height="15"/><rect class="cellb" x="410" y="235" width="15" height="15"/><rect class="cellw" x="425" y="235" width="15" height="15"/><rect class="cellw" x="440" y="235" width="15" height="15"/><rect class="cellw" x="455" y="235" width="15" height="15"/><rect class="cellw" x="470" y="235" width="15" height="15"/><rect class="cellw" x="485" y="235" width="15" height="15"/><rect class="cellw" x="500" y="235" width="15" height="15"/><rect class="cellb" x="515" y="235" width="15" height="15"/><rect class="box warn" x="348" y="37" width="19" height="216" rx="4" fill="none"/><text class="t" x="357.5" y="272" text-anchor="middle">a whole white column = a dead neuron</text><text class="tm" x="20" y="294" text-anchor="start">White = saturated (|output| &gt; 0.99). Some white is normal; a fully white column means that neuron never learns.</text></svg><figcaption>A sketch of the kind of picture he drew. In his real picture many cells were white but no column was fully white.</figcaption></figure>
+<ul>
+<li>It draws a <b>Boolean table</b>: 32 examples (rows) by 200 neurons (columns). <b>White</b> means the neuron is in a flat tail (more than 0.99 away from zero).</li>
+<li>In his picture <b>a lot is white</b>: many neurons are saturated, so many gradients get destroyed.</li>
+<li>The real danger is a <b>whole white column</b>. That is a <b>dead neuron</b>: no example ever lands in the active part, so it never learns.</li>
+<li>He scans for white columns and finds none. So every neuron gets some gradient, and the net still trains.</li>
+</ul>
+<div class="oneline"><small>In one line</small>A white cell is a saturated tanh; a fully white column is a dead neuron that can never learn.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c13" data-title="Dead neurons and other nonlinearities" data-num="13" data-track><header class="chead"><span class="num">13</span><h2>Dead neurons and other nonlinearities</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=1200s" target="_blank" rel="noopener" title="Open the video at 20:00">&#9654; 20:00</a></header><div class="body">
+<p>A <b>dead neuron</b> never activates for any input in the data, so its gradients are always zero. It is not only a tanh problem.</p>
+<table class="t"><tr><th>nonlinearity</th><th>flat region?</th><th>danger</th></tr>
+<tr><td>tanh</td><td>both tails</td><td>saturates, gradient vanishes</td></tr>
+<tr><td>sigmoid</td><td>both tails</td><td>same as tanh</td></tr>
+<tr><td>ReLU</td><td>everything below 0</td><td>a dead ReLU gets <b>exactly zero</b> gradient</td></tr>
+<tr><td>leaky ReLU</td><td>none</td><td>almost always gets a gradient</td></tr>
+<tr><td>ELU</td><td>left tail</td><td>can still suffer</td></tr></table>
+<ul>
+<li>A neuron can be dead from <b>initialisation</b>, by bad luck with its weights and bias.</li>
+<li>It can also die <b>during training</b>. With a very high learning rate a neuron gets a huge gradient and is "knocked off the data manifold". Afterwards no example activates it, so it stays dead forever: "permanent brain damage".</li>
+<li>A test: after training, push the whole training set through and look for neurons that <b>never</b> turn on.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Neurons can die when they sit in a flat region for every input; ReLU dies completely, leaky ReLU hardly at all.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c14" data-title="Fix: make the pre-activations smaller" data-num="14" data-track><header class="chead"><span class="num">14</span><h2>Fix: make the pre-activations smaller</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=1440s" target="_blank" rel="noopener" title="Open the video at 24:00">&#9654; 24:00</a></header><div class="body">
+<p><code>hpreact = embcat @ W1 + b1</code> is too far from zero. As with the logits, we want it <b>close to zero</b>.</p>
+<pre class="code" data-lang="python"><code>W1 = torch.randn((n_embd * block_size, n_hidden), generator=g) * 0.2
+b1 = torch.randn(n_hidden, generator=g) * 0.01
+W2 = torch.randn((n_hidden, vocab_size), generator=g) * 0.01
+b2 = torch.randn(vocab_size, generator=g) * 0</code></pre>
+<ul>
+<li><b>b1 × 0.01</b>: tiny but not zero, "a little bit of variation and diversity" among the tanh neurons. He finds that helps optimisation a bit.</li>
+<li><b>W1 × 0.1</b> first: the histogram becomes healthy and the pre-activations sit between about <b>-1.5 and 1.5</b>. No white cells at all.</li>
+<li>He then bumps it to <b>× 0.2</b> as "a nice distribution", and keeps that.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Small W1 (×0.2) and tiny b1 (×0.01) keep tanh in its active zone with no saturated neurons.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c15" data-title="Scoreboard so far, and a warning" data-num="15" data-track><header class="chead"><span class="num">15</span><h2>Scoreboard so far, and a warning</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=1560s" target="_blank" rel="noopener" title="Open the video at 26:00">&#9654; 26:00</a></header><div class="body">
+<table class="t"><tr><th>change</th><th>train</th><th>val</th></tr>
+<tr><td>original</td><td class="m">2.12</td><td class="m">2.17</td></tr>
+<tr><td>fix the confident softmax</td><td class="m">2.07</td><td class="m">2.13</td></tr>
+<tr class="hl"><td>fix the saturated tanh</td><td class="m">2.04</td><td class="m">2.10</td></tr></table>
+<ul>
+<li>Better initialisation means more steps spent on <b>productive training</b>, not on squashing weights or killing gradients.</li>
+<li><b>Warning:</b> this net has only one hidden layer, so the problem is "very forgiving". It learned even from a terrible start.</li>
+<li>With deep networks (say 50 layers) these problems <b>stack up</b>. A bad enough initialisation and the net may not train at all.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Two initialisation fixes took validation loss from 2.17 to 2.10; deeper nets are far less forgiving.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="t2" data-title="Test 2: saturated tanh" data-num="T2" data-track><header class="chead"><span class="num">T2</span><h2>Test 2: saturated tanh</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=1680s" target="_blank" rel="noopener" title="Open the video at 28:00">&#9654; 28:00</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>What does a tanh histogram with spikes at -1 and +1 tell you?</span></summary><div class="ans">The pre-activations are too large, so the tanh is saturated and most gradients through it are close to zero.</div></details><details class="q"><summary><span>Why does the tanh backward pass kill the gradient at t = ±1?</span></summary><div class="ans">The local gradient is 1 − t², which is 0 at ±1. Whatever the incoming gradient, the product is zero.</div></details><details class="q"><summary><span>What is a dead neuron, and how do you spot one in the white map?</span></summary><div class="ans">A neuron that never activates in the data, so it never gets gradients. In the h.abs() > 0.99 image it is a column that is white for every example.</div></details><details class="q"><summary><span>Which other nonlinearities can have this problem?</span></summary><div class="ans">Sigmoid (like tanh), ReLU (flat below zero, can die permanently), ELU (flat left part). Leaky ReLU has no flat tail.</div></details><details class="q"><summary><span>How did he fix the saturated tanh layer?</span></summary><div class="ans">Scaled W1 by 0.2 and b1 by 0.01 so the pre-activations stay close to zero.</div></details><details class="q"><summary><span>Why does this initialisation matter even if the net learns anyway?</span></summary><div class="ans">A better start wastes fewer steps, and deeper nets may not train at all from a bad start.</div></details><div class="oneline"><small>In one line</small>If you can answer these, Fix 2 is yours.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p3" data-short="Fix 3 · Kaiming init"><div class="kicker">Part 3 · 28:00 – 40:30</div><h2>Where do the magic numbers come from?</h2><p>A principled rule so we don't hand-tune 0.2 for every layer.</p></section><section class="concept" id="c16" data-title="Hand-tuned numbers don't scale" data-num="16" data-track><header class="chead"><span class="num">16</span><h2>Hand-tuned numbers don't scale</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=1680s" target="_blank" rel="noopener" title="Open the video at 28:00">&#9654; 28:00</a></header><div class="body">
+<p>We found 0.2 by looking at histograms. With a big net, nobody can do that by hand. There is a principled rule.</p>
+<pre class="code" data-lang="python"><code>x = torch.randn(1000, 10)      # 1000 examples, 10 inputs each, std 1
+w = torch.randn(10, 200)       # 200 neurons, each looking at 10 inputs
+y = x @ w
+x.std(), y.std()               # 0.99  -&gt;  3.10</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 760 228" role="img" aria-label="How the weight scale changes the spread"><line class="axis" x1="30" y1="190" x2="430" y2="190"/><polyline class="curve" points="30.0,190.0 33.3,190.0 36.7,190.0 40.0,190.0 43.3,190.0 46.7,190.0 50.0,190.0 53.3,190.0 56.7,190.0 60.0,190.0 63.3,190.0 66.7,190.0 70.0,190.0 73.3,190.0 76.7,190.0 80.0,190.0 83.3,190.0 86.7,190.0 90.0,190.0 93.3,190.0 96.7,190.0 100.0,190.0 103.3,190.0 106.7,190.0 110.0,190.0 113.3,190.0 116.7,190.0 120.0,190.0 123.3,190.0 126.7,190.0 130.0,190.0 133.3,190.0 136.7,190.0 140.0,190.0 143.3,190.0 146.7,190.0 150.0,190.0 153.3,190.0 156.7,190.0 160.0,190.0 163.3,190.0 166.7,189.9 170.0,189.8 173.3,189.6 176.7,189.2 180.0,188.5 183.3,187.4 186.7,185.5 190.0,182.6 193.3,178.3 196.7,172.2 200.0,163.9 203.3,153.4 206.7,140.6 210.0,125.9 213.3,110.1 216.7,94.4 220.0,80.0 223.3,68.5 226.7,61.0 230.0,58.3 233.3,61.0 236.7,68.5 240.0,80.0 243.3,94.4 246.7,110.1 250.0,125.9 253.3,140.6 256.7,153.4 260.0,163.9 263.3,172.2 266.7,178.3 270.0,182.6 273.3,185.5 276.7,187.4 280.0,188.5 283.3,189.2 286.7,189.6 290.0,189.8 293.3,189.9 296.7,190.0 300.0,190.0 303.3,190.0 306.7,190.0 310.0,190.0 313.3,190.0 316.7,190.0 320.0,190.0 323.3,190.0 326.7,190.0 330.0,190.0 333.3,190.0 336.7,190.0 340.0,190.0 343.3,190.0 346.7,190.0 350.0,190.0 353.3,190.0 356.7,190.0 360.0,190.0 363.3,190.0 366.7,190.0 370.0,190.0 373.3,190.0 376.7,190.0 380.0,190.0 383.3,190.0 386.7,190.0 390.0,190.0 393.3,190.0 396.7,190.0 400.0,190.0 403.3,190.0 406.7,190.0 410.0,190.0 413.3,190.0 416.7,190.0 420.0,190.0 423.3,190.0 426.7,190.0 430.0,190.0"/><polyline class="curve warn" points="30.0,190.0 33.3,190.0 36.7,190.0 40.0,190.0 43.3,189.9 46.7,189.9 50.0,189.9 53.3,189.9 56.7,189.8 60.0,189.8 63.3,189.8 66.7,189.7 70.0,189.6 73.3,189.6 76.7,189.5 80.0,189.4 83.3,189.2 86.7,189.1 90.0,188.9 93.3,188.7 96.7,188.5 100.0,188.2 103.3,187.9 106.7,187.5 110.0,187.1 113.3,186.7 116.7,186.2 120.0,185.6 123.3,185.0 126.7,184.3 130.0,183.5 133.3,182.6 136.7,181.7 140.0,180.7 143.3,179.6 146.7,178.4 150.0,177.2 153.3,175.9 156.7,174.5 160.0,173.0 163.3,171.5 166.7,170.0 170.0,168.4 173.3,166.7 176.7,165.1 180.0,163.4 183.3,161.8 186.7,160.1 190.0,158.5 193.3,157.0 196.7,155.5 200.0,154.1 203.3,152.8 206.7,151.6 210.0,150.6 213.3,149.7 216.7,148.9 220.0,148.3 223.3,147.9 226.7,147.6 230.0,147.5 233.3,147.6 236.7,147.9 240.0,148.3 243.3,148.9 246.7,149.7 250.0,150.6 253.3,151.6 256.7,152.8 260.0,154.1 263.3,155.5 266.7,157.0 270.0,158.5 273.3,160.1 276.7,161.8 280.0,163.4 283.3,165.1 286.7,166.7 290.0,168.4 293.3,170.0 296.7,171.5 300.0,173.0 303.3,174.5 306.7,175.9 310.0,177.2 313.3,178.4 316.7,179.6 320.0,180.7 323.3,181.7 326.7,182.6 330.0,183.5 333.3,184.3 336.7,185.0 340.0,185.6 343.3,186.2 346.7,186.7 350.0,187.1 353.3,187.5 356.7,187.9 360.0,188.2 363.3,188.5 366.7,188.7 370.0,188.9 373.3,189.1 376.7,189.2 380.0,189.4 383.3,189.5 386.7,189.6 390.0,189.6 393.3,189.7 396.7,189.8 400.0,189.8 403.3,189.8 406.7,189.9 410.0,189.9 413.3,189.9 416.7,189.9 420.0,190.0 423.3,190.0 426.7,190.0 430.0,190.0"/><text class="t" x="282.0" y="70" text-anchor="start">input x: std 1</text><text class="t" x="321.66666666666663" y="150" text-anchor="start">y = x @ w: std ≈ 3.1</text><text class="tm" x="230.0" y="214" text-anchor="middle">the Gaussian gets wider every layer</text><rect class="box" x="470" y="20" width="280" height="190" rx="12"/><text class="t" x="484" y="46" text-anchor="start">x has std 1. What does w do?</text><rect class="box warn" x="482" y="62" width="256" height="38" rx="8"/><text class="tmono" x="494" y="86" text-anchor="start">w = randn(10, 200)</text><text class="t" x="726" y="86" text-anchor="end">y std 3.10</text><rect class="box" x="482" y="108" width="256" height="38" rx="8"/><text class="tmono" x="494" y="132" text-anchor="start">w × 0.2</text><text class="t" x="726" y="132" text-anchor="end">y std 0.63</text><rect class="box acc" x="482" y="154" width="256" height="38" rx="8"/><text class="tmono" x="494" y="178" text-anchor="start">w ÷ √10  (÷ √fan_in)</text><text class="t" x="726" y="178" text-anchor="end">y std 1.01</text></svg><figcaption>Numbers from his experiment: 1000 inputs of 10 numbers, 200 neurons.</figcaption></figure>
+<ul>
+<li>The mean stays about 0 (the operation is symmetric), but the <b>standard deviation grows from 1 to about 3</b>. The Gaussian expands.</li>
+<li>We don't want that. We want <b>roughly unit Gaussian activations throughout</b> the net.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Multiplying by random weights widens the Gaussian (std 1 becomes about 3), which we don't want.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c17" data-title="Divide by the square root of fan-in" data-num="17" data-track><header class="chead"><span class="num">17</span><h2>Divide by the square root of fan-in</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=1800s" target="_blank" rel="noopener" title="Open the video at 30:00">&#9654; 30:00</a></header><div class="body">
+<p><b>fan-in</b> = how many inputs each neuron has (here 10). The scale of the weights controls the spread of the output:</p>
+<ul>
+<li>Weights <b>× 5</b>: std grows to about 15.</li>
+<li>Weights <b>× 0.2</b>: std shrinks to about 0.63.</li>
+<li>Weights <b>÷ √10</b>: std stays at <b>1</b> (measured 1.01).</li>
+</ul>
+<pre class="code" data-lang="python"><code>w = torch.randn(10, 200) / 10**0.5       # divide by sqrt(fan_in)
+y = x @ w
+y.std()                                  # 1.01</code></pre>
+<p>He says that mathematically, working through the variance of the product, the correct answer is to divide by the <b>square root of the fan-in</b>.</p>
+<div class="callout why"><b class="ctitle">My note</b><div>Each output adds up 10 products, and variances of independent terms add. So the std grows by √10, and dividing the weights by √10 cancels it.</div></div>
+<div class="oneline"><small>In one line</small>Dividing the weights by √fan_in keeps the output at the same standard deviation as the input.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c18" data-title="Kaiming (He) initialisation and the gain" data-num="18" data-track><header class="chead"><span class="num">18</span><h2>Kaiming (He) initialisation and the gain</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=1920s" target="_blank" rel="noopener" title="Open the video at 32:00">&#9654; 32:00</a></header><div class="body">
+<p>This is studied in the paper <b>“Delving Deep into Rectifiers”</b> (He et al., 2015), for ReLU networks.</p>
+<ul>
+<li>ReLU <b>throws away half</b> of the distribution (negatives become 0). To make up for it, the weights need an extra factor: std = <b>√(2 / fan_in)</b> instead of √(1 / fan_in).</li>
+<li>The paper also studies the <b>backward pass</b>. They find that if the forward pass is well scaled, the backward pass is <b>about as well scaled</b>, up to a constant. So the choice does not matter much.</li>
+<li>He calls this probably "the most common way of initialising neural networks now".</li>
+</ul>
+<div class="oneline"><small>In one line</small>For ReLU the weights get an extra factor of √2 because half the signal is discarded.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c19" data-title="In PyTorch: kaiming_normal_ and the gain" data-num="19" data-track><header class="chead"><span class="num">19</span><h2>In PyTorch: kaiming_normal_ and the gain</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=2040s" target="_blank" rel="noopener" title="Open the video at 34:00">&#9654; 34:00</a></header><div class="body">
+<div class="formula"><i>std</i> = <i>gain</i> ÷ √<i>fan_in</i></div>
+<ul>
+<li><b>mode</b>: <code>'fan_in'</code> (default) keeps the <b>activations</b> normalised; <code>'fan_out'</code> keeps the gradients normalised. The paper says it doesn't matter much, so most people keep the default.</li>
+<li><b>nonlinearity</b>: the gain depends on what comes after the layer.</li>
+</ul>
+<table class="t"><tr><th>nonlinearity</th><th>gain</th></tr>
+<tr><td>linear / identity</td><td class="m">1</td></tr>
+<tr><td>ReLU</td><td class="m">√2</td></tr>
+<tr class="hl"><td>tanh</td><td class="m">5/3</td></tr></table>
+<p>Why a gain at all? tanh and ReLU are <b>contractive</b>: they squeeze the tails of the distribution in. We boost the weights a bit to <b>fight the squeezing</b> and renormalise back to unit std.</p>
+<div class="oneline"><small>In one line</small>For tanh the PyTorch gain is 5/3, a boost that compensates for tanh squeezing its inputs.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c20" data-title="Why he skips the details: modern tricks" data-num="20" data-track><header class="chead"><span class="num">20</span><h2>Why he skips the details: modern tricks</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=2160s" target="_blank" rel="noopener" title="Open the video at 36:00">&#9654; 36:00</a></header><div class="body">
+<p>About seven years ago you had to be <b>extremely careful</b> with activations, gradients, their ranges, histograms, precise gains. Everything was "finicky and fragile", especially for deep nets.</p>
+<p>Modern innovations make exact initialisation much less important:</p>
+<ol>
+<li><b>Residual connections</b> (covered later).</li>
+<li><b>Normalisation layers</b>: batch norm, layer norm, group norm.</li>
+<li><b>Better optimisers</b>: not plain SGD, but RMSProp and especially <b>Adam</b>.</li>
+</ol>
+<p>What he does in practice: <b>divide the weights by √fan_in</b>, roughly what we just did.</p>
+<div class="oneline"><small>In one line</small>Residual connections, normalisation layers and Adam make exact initialisation far less critical today.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c21" data-title="In practice: std = gain / √fan_in" data-num="21" data-track><header class="chead"><span class="num">21</span><h2>In practice: std = gain / √fan_in</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=2220s" target="_blank" rel="noopener" title="Open the video at 37:00">&#9654; 37:00</a></header><div class="body">
+<p><code>torch.randn</code> has std 1, so multiplying by a number sets the std to that number.</p>
+<pre class="code" data-lang="python"><code>(torch.randn(10000) * 0.2).std()                    # 0.2010
+
+fan_in = n_embd * block_size                        # 10 * 3 = 30
+W1 = torch.randn((fan_in, n_hidden), generator=g) * (5/3) / fan_in**0.5
+b1 = torch.randn(n_hidden, generator=g) * 0.01
+W2 = torch.randn((n_hidden, vocab_size), generator=g) * 0.01
+b2 = torch.randn(vocab_size, generator=g) * 0</code></pre>
+<ul>
+<li>He first used 10 as the fan-in, then noticed it is <b>30</b>: each character has 10 numbers and we glue three together.</li>
+<li>So the std becomes (5/3) ÷ √30 ≈ <b>0.30</b>, against the 0.2 we found by eye.</li>
+<li>Training again, validation loss lands at <b>about 2.10</b>, "the same spot", but with <b>no magic numbers</b> from guessing.</li>
+</ul>
+<div class="callout why"><b class="ctitle">In his words</b><div>This is “semi-principled” and will scale to much bigger networks, something we can use as a guide.</div></div>
+<div class="oneline"><small>In one line</small>Weights get std = gain / √fan_in; for tanh and fan-in 30 that is 0.30, and the loss stays at 2.10.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="t3" data-title="Test 3: principled initialisation" data-num="T3" data-track><header class="chead"><span class="num">T3</span><h2>Test 3: principled initialisation</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=2430s" target="_blank" rel="noopener" title="Open the video at 40:30">&#9654; 40:30</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>Why does y = x @ w with unit-Gaussian x and w give a wider spread, and what fixes it?</span></summary><div class="ans">Each output sums 10 products, so the std grows to about 3. Divide the weights by √fan_in to keep the std at 1.</div></details><details class="q"><summary><span>What is fan-in?</span></summary><div class="ans">The number of inputs to each neuron (rows of the weight matrix). Here the first layer's fan-in is 30: 3 characters × 10 embedding numbers.</div></details><details class="q"><summary><span>What is the Kaiming initialisation formula?</span></summary><div class="ans">std = gain / √fan_in. The gain depends on the nonlinearity: 1 for linear, √2 for ReLU, 5/3 for tanh.</div></details><details class="q"><summary><span>Why do ReLU and tanh need a gain greater than 1?</span></summary><div class="ans">They squash (contract) the distribution, so the weights are boosted a little to keep the standard deviation stable.</div></details><details class="q"><summary><span>Name three modern innovations that make initialisation less critical.</span></summary><div class="ans">Residual connections, normalisation layers (batch/layer/group norm), and better optimisers like RMSProp and Adam.</div></details><div class="oneline"><small>In one line</small>If you can answer these, Fix 3 is yours.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p4" data-short="Batch normalisation"><div class="kicker">Part 4 · 40:30 – 1:18:00</div><h2>Batch normalisation</h2><p>Stop hoping the activations stay Gaussian: force them to be.</p></section><section class="concept" id="c22" data-title="The big idea of batch norm" data-num="22" data-track><header class="chead"><span class="num">22</span><h2>The big idea of batch norm</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=2430s" target="_blank" rel="noopener" title="Open the video at 40:30">&#9654; 40:30</a></header><div class="body">
+<p>Batch normalisation came out in <b>2015</b> from a team at Google. It made it possible to train <b>very deep networks reliably</b>: "it basically just worked".</p>
+<ul>
+<li>We want the pre-activations <b>roughly Gaussian</b> (mean 0, std 1), at least at the start. Not too small (the tanh does nothing), not too large (the tanh saturates).</li>
+<li>The insight: <b>why not just normalise them to be Gaussian?</b> It sounds crazy, but standardising is a <b>perfectly differentiable</b> operation, so backprop works through it.</li>
+<li>He says his mind was blown when he first read it.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Batch norm simply standardises the pre-activations, and because that is differentiable, you can train through it.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c23" data-title="Standardise over the batch" data-num="23" data-track><header class="chead"><span class="num">23</span><h2>Standardise over the batch</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=2520s" target="_blank" rel="noopener" title="Open the video at 42:00">&#9654; 42:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>hpreact = embcat @ W1 + b1                           # (32, 200)
+hpreact = (hpreact - hpreact.mean(0, keepdim=True)) / hpreact.std(0, keepdim=True)</code></pre>
+<ul>
+<li><code>hpreact</code> is 32 examples × 200 neurons. We take the mean down <b>dimension 0</b> (over the batch) and keep the shape: <span class="shape">(1, 200)</span>. Same for the std.</li>
+<li>Subtract the mean, divide by the std. Now <b>every neuron</b> has exactly mean 0 and std 1 over these 32 examples.</li>
+<li>That is why it is called <b>batch</b> normalisation: we normalise using the batch.</li>
+</ul>
+<div class="formula"><i>x̂</i> = (<i>x</i> − <i>μ</i><sub>batch</sub>) ÷ √(<i>σ</i><sup>2</sup><sub>batch</sub> + <i>ε</i>)</div>
+<p class="hint">The paper's version adds a tiny ε under the square root. More on that later.</p>
+<div class="oneline"><small>In one line</small>Subtract each neuron's batch mean and divide by its batch std: every neuron becomes unit Gaussian.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c24" data-title="But don't force it forever: scale and shift" data-num="24" data-track><header class="chead"><span class="num">24</span><h2>But don't force it forever: scale and shift</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=2730s" target="_blank" rel="noopener" title="Open the video at 45:30">&#9654; 45:30</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 760 262" role="img" aria-label="What a batch norm layer does to the hidden layer"><text class="t" x="10" y="22" text-anchor="start">hpreact  (32 examples × 200 neurons)</text><rect class="cell" x="20" y="36" width="40" height="26"/><rect class="cell" x="60" y="36" width="40" height="26"/><rect class="cell hl" x="100" y="36" width="40" height="26"/><rect class="cell" x="140" y="36" width="40" height="26"/><rect class="cell" x="180" y="36" width="40" height="26"/><rect class="cell" x="220" y="36" width="40" height="26"/><rect class="cell" x="20" y="62" width="40" height="26"/><rect class="cell" x="60" y="62" width="40" height="26"/><rect class="cell hl" x="100" y="62" width="40" height="26"/><rect class="cell" x="140" y="62" width="40" height="26"/><rect class="cell" x="180" y="62" width="40" height="26"/><rect class="cell" x="220" y="62" width="40" height="26"/><rect class="cell" x="20" y="88" width="40" height="26"/><rect class="cell" x="60" y="88" width="40" height="26"/><rect class="cell hl" x="100" y="88" width="40" height="26"/><rect class="cell" x="140" y="88" width="40" height="26"/><rect class="cell" x="180" y="88" width="40" height="26"/><rect class="cell" x="220" y="88" width="40" height="26"/><rect class="cell" x="20" y="114" width="40" height="26"/><rect class="cell" x="60" y="114" width="40" height="26"/><rect class="cell hl" x="100" y="114" width="40" height="26"/><rect class="cell" x="140" y="114" width="40" height="26"/><rect class="cell" x="180" y="114" width="40" height="26"/><rect class="cell" x="220" y="114" width="40" height="26"/><rect class="cell" x="20" y="140" width="40" height="26"/><rect class="cell" x="60" y="140" width="40" height="26"/><rect class="cell hl" x="100" y="140" width="40" height="26"/><rect class="cell" x="140" y="140" width="40" height="26"/><rect class="cell" x="180" y="140" width="40" height="26"/><rect class="cell" x="220" y="140" width="40" height="26"/><rect class="cell" x="20" y="166" width="40" height="26"/><rect class="cell" x="60" y="166" width="40" height="26"/><rect class="cell hl" x="100" y="166" width="40" height="26"/><rect class="cell" x="140" y="166" width="40" height="26"/><rect class="cell" x="180" y="166" width="40" height="26"/><rect class="cell" x="220" y="166" width="40" height="26"/><text class="ts" x="120.0" y="208" text-anchor="middle">one neuron:</text><text class="ts" x="120.0" y="222" text-anchor="middle">its 32 values</text><rect class="box info" x="300" y="40" width="150" height="54" rx="10"/><text class="t" x="375.0" y="63.5" text-anchor="middle">1. mean and std</text><text class="tm" x="375.0" y="79.5" text-anchor="middle">of each column</text><rect class="box acc" x="300" y="112" width="150" height="54" rx="10"/><text class="t" x="375.0" y="135.5" text-anchor="middle">2. (x − mean) / std</text><text class="tm" x="375.0" y="151.5" text-anchor="middle">→ mean 0, std 1</text><rect class="box acc" x="300" y="184" width="150" height="54" rx="10"/><text class="t" x="375.0" y="207.5" text-anchor="middle">3. × γ + β</text><text class="tm" x="375.0" y="223.5" text-anchor="middle">learnable gain, bias</text><line class="ln" x1="375" y1="94" x2="375" y2="112" marker-end="url(#arr)"/><line class="ln" x1="375" y1="166" x2="375" y2="184" marker-end="url(#arr)"/><path class="ln" d="M266 90 L296 67" marker-end="url(#arr)"/><rect class="box" x="520" y="184" width="110" height="54" rx="10"/><text class="t" x="575.0" y="207.5" text-anchor="middle">tanh</text><text class="tm" x="575.0" y="223.5" text-anchor="middle"></text><line class="ln" x1="450" y1="211" x2="520" y2="211" marker-end="url(#arr)"/><text class="tmono" x="700" y="70" text-anchor="middle">γ starts at 1</text><text class="tmono" x="700" y="92" text-anchor="middle">β starts at 0</text><text class="tm" x="700" y="120" text-anchor="middle">so at the start</text><text class="tm" x="700" y="138" text-anchor="middle">every neuron is</text><text class="tm" x="700" y="156" text-anchor="middle">exactly unit Gaussian</text></svg><figcaption>Each column (one neuron) is standardised over the batch, then scaled and shifted by learnable numbers.</figcaption></figure>
+<p>We want Gaussian <b>at initialisation</b>, not forced for ever. The net should be able to make some neurons more spread out, sharper, more or less "trigger happy". So the paper adds a <b>scale and shift</b>:</p>
+<pre class="code" data-lang="python"><code>bngain = torch.ones((1, n_hidden))          # gamma, starts at 1
+bnbias = torch.zeros((1, n_hidden))         # beta,  starts at 0
+parameters = [C, W1, b1, W2, b2, bngain, bnbias]    # trained by backprop
+
+hpreact = embcat @ W1 + b1
+hpreact = bngain * (hpreact - hpreact.mean(0, keepdim=True)) / hpreact.std(0, keepdim=True) + bnbias</code></pre>
+<ul>
+<li>At the start γ = 1 and β = 0, so each neuron is exactly unit Gaussian.</li>
+<li>During training backprop can change γ and β, so the net may reshape the distribution however it likes.</li>
+<li>They must be in the <b>parameters</b> list. The count goes from 11,897 to <b>12,297</b> (+200 +200).</li>
+<li>Do the same normalise-and-scale at <b>test time</b> too.</li>
+</ul>
+<div class="oneline"><small>In one line</small>γ and β start at 1 and 0 and are learned, so the net can undo or reshape the normalisation as it needs.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c25" data-title="The result, and when batch norm matters" data-num="25" data-track><header class="chead"><span class="num">25</span><h2>The result, and when batch norm matters</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=2880s" target="_blank" rel="noopener" title="Open the video at 48:00">&#9654; 48:00</a></header><div class="body">
+<p>Validation loss comes out at about <b>2.10</b> (screen: train 2.0668, val 2.1048). Not better, and he did not expect it to be.</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 300" role="img" aria-label="Validation loss through the lecture"><text class="t" x="10" y="22" text-anchor="start">Validation loss after each fix  (lower is better, axis from 2.08 to 2.18)</text><line class="grid" x1="330.0" y1="40" x2="330.0" y2="250"/><text class="tmono" x="330.0" y="268" text-anchor="middle">2.08</text><line class="grid" x1="411.0" y1="40" x2="411.0" y2="250"/><text class="tmono" x="411.0" y="268" text-anchor="middle">2.10</text><line class="grid" x1="492.0" y1="40" x2="492.0" y2="250"/><text class="tmono" x="492.0" y="268" text-anchor="middle">2.12</text><line class="grid" x1="573.0" y1="40" x2="573.0" y2="250"/><text class="tmono" x="573.0" y="268" text-anchor="middle">2.14</text><line class="grid" x1="654.0" y1="40" x2="654.0" y2="250"/><text class="tmono" x="654.0" y="268" text-anchor="middle">2.16</text><line class="grid" x1="735.0" y1="40" x2="735.0" y2="250"/><text class="tmono" x="735.0" y="268" text-anchor="middle">2.18</text><text class="tm" x="10" y="66" text-anchor="start">starting point</text><line class="dash" x1="330" y1="62" x2="687.2" y2="62"/><circle class="pt warn" cx="687.2" cy="62" r="8"/><text class="t" x="701.2099999999999" y="66" text-anchor="start">2.17</text><text class="tm" x="10" y="108" text-anchor="start">fix: confident softmax</text><line class="dash" x1="330" y1="104" x2="532.5" y2="104"/><circle class="pt acc" cx="532.5" cy="104" r="8"/><text class="t" x="546.4999999999991" y="108" text-anchor="start">2.13</text><text class="tm" x="10" y="150" text-anchor="start">fix: saturated tanh</text><line class="dash" x1="330" y1="146" x2="421.9" y2="146"/><circle class="pt acc" cx="421.9" cy="146" r="8"/><text class="t" x="435.9349999999997" y="150" text-anchor="start">2.10</text><text class="tm" x="10" y="192" text-anchor="start">Kaiming-style init (≈ 2.10)</text><line class="dash" x1="330" y1="188" x2="411.0" y2="188"/><circle class="pt acc" cx="411.0" cy="188" r="8"/><text class="t" x="425.0" y="192" text-anchor="start">≈ 2.10</text><text class="tm" x="10" y="234" text-anchor="start">+ batch norm</text><line class="dash" x1="330" y1="230" x2="430.4" y2="230"/><circle class="pt acc" cx="430.4" cy="230" r="8"/><text class="t" x="444.43999999999966" y="234" text-anchor="start">2.10</text></svg><figcaption>Initialisation fixes bought about 0.07. Batch norm did not improve this tiny network further.</figcaption></figure>
+<ul>
+<li>We have <b>one</b> hidden layer, and there we could work out the right weight scale ourselves. Batch norm has nothing left to fix.</li>
+<li>In a <b>deep</b> net with many kinds of layers and residual connections, tuning every weight scale by hand quickly becomes <b>intractable</b>.</li>
+<li>Instead you <b>sprinkle batch norm layers</b> throughout. The usual place: right after each <b>linear</b> or <b>convolutional</b> layer, to control the scale of its output.</li>
+<li>It does not need perfect mathematics for every kind of building block, and it <b>stabilises training</b>, which is why it is popular.</li>
+</ul>
+<div class="oneline"><small>In one line</small>On this tiny net batch norm changes nothing (val 2.10), but in deep nets it replaces fragile hand-tuning.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c26" data-title="The catch: examples become coupled" data-num="26" data-track><header class="chead"><span class="num">26</span><h2>The catch: examples become coupled</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=3030s" target="_blank" rel="noopener" title="Open the video at 50:30">&#9654; 50:30</a></header><div class="body">
+<p class="lead">The stability has "a terrible cost". Something strange and unnatural happens.</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 248" role="img" aria-label="Batch norm couples the examples in a batch"><text class="t" x="380" y="20" text-anchor="middle">The same example A, three different random batches</text><rect class="box" x="10" y="40" width="226" height="64" rx="10"/><text class="t" x="123.0" y="68.5" text-anchor="middle">batch 1</text><text class="tm" x="123.0" y="84.5" text-anchor="middle">A + 31 other names</text><line class="ln" x1="123" y1="104" x2="123" y2="134" marker-end="url(#arr)"/><rect class="box acc" x="43" y="134" width="160" height="56" rx="10"/><text class="t" x="123.0" y="158.5" text-anchor="middle">h for example A</text><text class="tm" x="123.0" y="174.5" text-anchor="middle">= 0.31</text><rect class="box" x="262" y="40" width="226" height="64" rx="10"/><text class="t" x="375.0" y="68.5" text-anchor="middle">batch 2</text><text class="tm" x="375.0" y="84.5" text-anchor="middle">A + 31 different names</text><line class="ln" x1="375" y1="104" x2="375" y2="134" marker-end="url(#arr)"/><rect class="box warn" x="295" y="134" width="160" height="56" rx="10"/><text class="t" x="375.0" y="158.5" text-anchor="middle">h for example A</text><text class="tm" x="375.0" y="174.5" text-anchor="middle">= 0.27</text><rect class="box" x="514" y="40" width="226" height="64" rx="10"/><text class="t" x="627.0" y="68.5" text-anchor="middle">batch 3</text><text class="tm" x="627.0" y="84.5" text-anchor="middle">A + 31 more names</text><line class="ln" x1="627" y1="104" x2="627" y2="134" marker-end="url(#arr)"/><rect class="box warn" x="547" y="134" width="160" height="56" rx="10"/><text class="t" x="627.0" y="158.5" text-anchor="middle">h for example A</text><text class="tm" x="627.0" y="174.5" text-anchor="middle">= 0.36</text><text class="ts" x="380" y="214" text-anchor="middle">The numbers are made up to show the idea: A's hidden values change a little depending on its batch mates.</text><text class="tm" x="380" y="234" text-anchor="middle">That jitter acts like noise: a mild regulariser, but it also couples the examples together.</text></svg><figcaption>Because the mean and std come from the whole batch, one example's output depends on the others.</figcaption></figure>
+<ul>
+<li>Before: each example went through the net <b>alone</b>. Batches were just an efficiency trick.</li>
+<li>Now the mean and std come from the whole batch, so an example's hidden state and logits depend on <b>which other examples</b> were drawn with it. They "jitter" from batch to batch.</li>
+<li>You would think that is a bug. But oddly it <b>helps</b>: the jitter is a <b>regulariser</b>. It pads out each example with a little noise, a bit like <b>data augmentation</b>, so the net finds it harder to overfit.</li>
+<li>That side effect is a reason batch norm is hard to remove.</li>
+<li>But "no one likes this property": it causes many <b>bugs</b>. People have tried to replace it with <b>layer norm, instance norm, group norm</b>, which don't couple examples. Batch norm "just works quite well", so it stays.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Batch norm makes each example depend on its batch mates; the noise regularises, but it also causes bugs.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c27" data-title="At test time: one example, no batch" data-num="27" data-track><header class="chead"><span class="num">27</span><h2>At test time: one example, no batch</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=3270s" target="_blank" rel="noopener" title="Open the video at 54:30">&#9654; 54:30</a></header><div class="body">
+<p>When we deploy, we want to feed <b>one</b> example. But the net now expects a batch to compute a mean and std. How?</p>
+<p><b>The paper's first answer</b>: after training, compute the mean and std <b>once over the whole training set</b> and fix them.</p>
+<pre class="code" data-lang="python"><code>with torch.no_grad():
+    emb = C[Xtr]
+    embcat = emb.view(emb.shape[0], -1)
+    hpreact = embcat @ W1 + b1
+    bnmean = hpreact.mean(0, keepdim=True)
+    bnstd  = hpreact.std(0, keepdim=True)
+
+# at evaluation time, use the fixed numbers
+hpreact = bngain * (hpreact - bnmean) / bnstd + bnbias</code></pre>
+<ul>
+<li>The loss is basically identical (train 2.0668, val 2.1049).</li>
+<li>And now a single example can be forwarded, because mean and std are fixed numbers.</li>
+</ul>
+<div class="oneline"><small>In one line</small>After training, compute the mean and std once over the training set and use them at inference.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c28" data-title="Running statistics, in one stage" data-num="28" data-track><header class="chead"><span class="num">28</span><h2>Running statistics, in one stage</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=3390s" target="_blank" rel="noopener" title="Open the video at 56:30">&#9654; 56:30</a></header><div class="body">
+<p>"Nobody wants a second stage after training, because everyone is lazy." The paper's other idea: keep a <b>running</b> mean and std <b>while training</b>.</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 256" role="img" aria-label="Two ways to get the statistics used at test time"><text class="lane" x="10" y="22" text-anchor="start">OPTION A · two stages (the paper's first idea)</text><rect class="box" x="10" y="36" width="200" height="56" rx="10"/><text class="t" x="110.0" y="60.5" text-anchor="middle">train the net</text><text class="tm" x="110.0" y="76.5" text-anchor="middle">200,000 steps</text><line class="ln" x1="210" y1="64" x2="250" y2="64" marker-end="url(#arr)"/><rect class="box info" x="250" y="36" width="240" height="56" rx="10"/><text class="t" x="370.0" y="60.5" text-anchor="middle">one pass over the training set</text><text class="tm" x="370.0" y="76.5" text-anchor="middle">compute mean and std once</text><line class="ln" x1="490" y1="64" x2="530" y2="64" marker-end="url(#arr)"/><rect class="box acc" x="530" y="36" width="220" height="56" rx="10"/><text class="t" x="640.0" y="60.5" text-anchor="middle">inference</text><text class="tm" x="640.0" y="76.5" text-anchor="middle">uses those fixed numbers</text><text class="lane" x="10" y="126" text-anchor="start">OPTION B · one stage (what everyone uses)</text><rect class="box info" x="10" y="140" width="330" height="70" rx="10"/><text class="t" x="175.0" y="163.5" text-anchor="middle">train the net</text><text class="tm" x="175.0" y="179.5" text-anchor="middle">and update running mean/std every step</text><text class="tm" x="175.0" y="195.5" text-anchor="middle">new = 0.999 × old + 0.001 × batch</text><line class="ln" x1="340" y1="175" x2="400" y2="175" marker-end="url(#arr)"/><rect class="box acc" x="400" y="140" width="350" height="70" rx="10"/><text class="t" x="575.0" y="163.5" text-anchor="middle">inference</text><text class="tm" x="575.0" y="179.5" text-anchor="middle">uses the running mean and std</text><text class="tm" x="575.0" y="195.5" text-anchor="middle">(no second stage, single examples work)</text><text class="tm" x="380" y="240" text-anchor="middle">He measured both: the running numbers came out very close to the one-pass numbers, and the loss was the same.</text></svg><figcaption>Lazy wins: estimate them while training.</figcaption></figure>
+<pre class="code" data-lang="python"><code>bnmean_running = torch.zeros((1, n_hidden))      # start: mean 0
+bnstd_running  = torch.ones((1, n_hidden))       # start: std 1
+
+# inside the training loop, after computing this batch's bnmeani and bnstdi
+with torch.no_grad():
+    bnmean_running = 0.999 * bnmean_running + 0.001 * bnmeani
+    bnstd_running  = 0.999 * bnstd_running  + 0.001 * bnstdi</code></pre>
+<ul>
+<li>Starting values: at init <code>hpreact</code> is about unit Gaussian, so mean 0 and std 1 are good guesses.</li>
+<li>These are <b>not parameters</b>: no gradient is ever taken for them, so the update sits under <code>no_grad</code>. It is a "janky" smooth running average.</li>
+<li>After training the running numbers are <b>very similar</b> to the ones computed in one pass over the training set, "not identical but pretty close". The validation loss is basically the same.</li>
+<li>So we can drop the second stage. PyTorch's batch norm layer works exactly like this.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Update a running mean and std during training (0.999 old + 0.001 new), so no second calibration stage is needed.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c29" data-title="Two small details: epsilon and the useless bias" data-num="29" data-track><header class="chead"><span class="num">29</span><h2>Two small details: epsilon and the useless bias</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=3660s" target="_blank" rel="noopener" title="Open the video at 61:00">&#9654; 61:00</a></header><div class="body">
+<p><b>1. Epsilon.</b> The formula divides by <code>√(variance + ε)</code>, with ε a small number, by default <b>1e-5</b>. It prevents a division by zero if a batch's variance is exactly zero. He leaves it out here because it is unlikely in this example.</p>
+<p><b>2. The bias before batch norm is wasted.</b></p>
+<pre class="code" data-lang="python"><code>hpreact = embcat @ W1 + b1          # b1 is added...
+hpreact = bngain * (hpreact - mean) / std + bnbias    # ...then subtracted out by the mean</code></pre>
+<ul>
+<li>Whatever bias you add, the batch mean subtracts it again. So <code>b1.grad</code> is <b>zero</b>: it never learns.</li>
+<li>With batch norm after a weight layer, <b>leave the bias out</b> (<code>bias=False</code>). The batch norm layer has its own bias, β, which takes over that job.</li>
+<li>With b1 removed the parameter count falls to <b>12,097</b> (screen).</li>
+<li>Keeping it is not catastrophic, just wasteful.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Epsilon avoids dividing by zero, and a bias before batch norm is useless because the mean subtracts it.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c30" data-title="A batch norm layer, summarised" data-num="30" data-track><header class="chead"><span class="num">30</span><h2>A batch norm layer, summarised</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=3780s" target="_blank" rel="noopener" title="Open the video at 63:00">&#9654; 63:00</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 760 224" role="img" aria-label="Parameters and buffers of a batch norm layer"><rect class="box" x="10" y="20" width="150" height="50" rx="10"/><text class="t" x="85.0" y="41.5" text-anchor="middle">input</text><text class="tm" x="85.0" y="57.5" text-anchor="middle">pre-activations</text><line class="ln" x1="160" y1="45" x2="220" y2="45" marker-end="url(#arr)"/><rect class="box acc" x="220" y="10" width="300" height="70" rx="10"/><text class="t" x="370.0" y="33.5" text-anchor="middle">BatchNorm layer</text><text class="tm" x="370.0" y="49.5" text-anchor="middle">training: uses THIS batch's mean/std</text><text class="tm" x="370.0" y="65.5" text-anchor="middle">inference: uses the RUNNING mean/std</text><line class="ln" x1="520" y1="45" x2="580" y2="45" marker-end="url(#arr)"/><rect class="box" x="580" y="20" width="170" height="50" rx="10"/><text class="t" x="665.0" y="41.5" text-anchor="middle">output</text><text class="tm" x="665.0" y="57.5" text-anchor="middle">then tanh</text><rect class="box acc" x="10" y="110" width="360" height="100" rx="12"/><text class="lane" x="190" y="134" text-anchor="middle">PARAMETERS  (learned by backprop)</text><text class="t" x="190" y="162" text-anchor="middle">γ  gain   ·   β  bias</text><text class="tm" x="190" y="184" text-anchor="middle">start at 1 and 0, then trained like any weight</text><rect class="box info" x="390" y="110" width="360" height="100" rx="12"/><text class="lane" x="570" y="134" text-anchor="middle">BUFFERS  (no gradient)</text><text class="t" x="570" y="162" text-anchor="middle">running mean  ·  running std</text><text class="tm" x="570" y="184" text-anchor="middle">updated on the side by a moving average</text><path class="ln acc" d="M370 80 C370 96 190 94 190 110" marker-end="url(#arr)"/><path class="ln" d="M370 80 C370 96 570 94 570 110" marker-end="url(#arr)"/></svg><figcaption>Two kinds of numbers live inside the layer, and only one kind is trained with gradients.</figcaption></figure>
+<ul>
+<li>It controls the <b>statistics of the activations</b> in the net. Sprinkle it throughout, usually <b>after</b> layers with multiplications (linear, convolution).</li>
+<li><b>Parameters</b>: the gain γ and bias β, trained with backprop.</li>
+<li><b>Buffers</b>: the running mean and running std, updated by the moving average, not by gradients.</li>
+<li>What it does: compute the mean and std of the batch, centre and scale it to unit Gaussian, then scale and offset by the learned γ and β. Meanwhile it keeps the running statistics.</li>
+<li>At inference it uses the running numbers, so a <b>single example</b> can be forwarded.</li>
+</ul>
+<div class="oneline"><small>In one line</small>A batch norm layer normalises with batch statistics in training and with running statistics at inference.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c31" data-title="A real example: ResNet's bottleneck block" data-num="31" data-track><header class="chead"><span class="num">31</span><h2>A real example: ResNet's bottleneck block</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=3900s" target="_blank" rel="noopener" title="Open the video at 65:00">&#9654; 65:00</a></header><div class="body">
+<p>Searching “resnet pytorch” gives the stock PyTorch implementation of a <b>residual network</b>, used for image classification. We haven't covered it, but notice the pattern.</p>
+<ul>
+<li>It is built from many stacked <b>blocks</b>. In <code>__init__</code> the layers are created, in <code>forward</code> they are applied. This is the same job as our code.</li>
+<li>The motif repeats: <b>convolution → batch norm → ReLU</b>, again and again. (A convolution is a linear layer applied to <b>overlapping patches</b> of an image: still <code>wx + b</code>.)</li>
+<li>That is exactly our <b>weight layer → normalisation layer → nonlinearity</b>, with ReLU instead of tanh. For very deep nets ReLU tends to work a bit better.</li>
+<li>The convolutions are created with <b><code>bias=False</code></b>, for the same reason as ours: a batch norm follows, so the bias would be subtracted out.</li>
+<li>The <b>residual connection</b> that also appears is covered in a later lecture.</li>
+</ul>
+<div class="oneline"><small>In one line</small>ResNets repeat conv → batch norm → ReLU, with bias=False on the convs: our linear → norm → tanh motif.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c32" data-title="PyTorch's Linear and BatchNorm1d" data-num="32" data-track><header class="chead"><span class="num">32</span><h2>PyTorch's Linear and BatchNorm1d</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=4140s" target="_blank" rel="noopener" title="Open the video at 69:00">&#9654; 69:00</a></header><div class="body">
+<p><b>nn.Linear</b> computes <code>x @ W + b</code>.</p>
+<ul>
+<li>It needs <b>in_features</b> (fan-in) and <b>out_features</b> (fan-out), and a <b>bias</b> flag. Set <code>bias=False</code> if a normalisation layer follows.</li>
+<li>Default initialisation: <b>uniform</b> between −√k and +√k, with k = 1/fan_in. So the scale is 1/√fan_in, the same idea as ours but <b>without a gain</b> and drawn uniformly instead of from a Gaussian.</li>
+</ul>
+<p><b>nn.BatchNorm1d(num_features)</b> is the layer we built. Its main options:</p>
+<table class="t"><tr><th>option</th><th>meaning</th></tr>
+<tr><td class="m">num_features</td><td>200 for our hidden layer</td></tr>
+<tr><td class="m">eps = 1e-5</td><td>the epsilon in the division</td></tr>
+<tr><td class="m">momentum = 0.1</td><td>speed of the running averages (we used 0.001)</td></tr>
+<tr><td class="m">affine = True</td><td>has the learnable gain and bias; almost always kept on</td></tr>
+<tr><td class="m">track_running_stats</td><td>keep running mean/std; turn off if you estimate them yourself afterwards</td></tr>
+<tr><td class="m">device, dtype</td><td>CPU or GPU, and float precision</td></tr></table>
+<p><b>Momentum and batch size.</b> With a big batch, each batch's mean and std are good estimates, so 0.1 works. With a small batch like <b>32</b> they jump around, and 0.1 may be too fast: the running numbers would "thrash" instead of settling.</p>
+<div class="oneline"><small>In one line</small>PyTorch defaults to eps=1e-5 and momentum=0.1; with batches as small as 32 a lower momentum is safer.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="t4" data-title="Test 4: batch normalisation" data-num="T4" data-track><header class="chead"><span class="num">T4</span><h2>Test 4: batch normalisation</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=4440s" target="_blank" rel="noopener" title="Open the video at 74:00">&#9654; 74:00</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>What are the steps of a batch norm layer?</span></summary><div class="ans">Compute the batch mean and std per neuron, standardise to mean 0 and std 1, then multiply by a learnable gain γ and add a learnable bias β.</div></details><details class="q"><summary><span>Why do we need γ and β?</span></summary><div class="ans">We want unit Gaussian only at initialisation. γ and β let the net move, widen or sharpen the distribution as training needs.</div></details><details class="q"><summary><span>What strange property does batch norm introduce, and what good and bad does it do?</span></summary><div class="ans">Examples in a batch become coupled, since their statistics depend on each other. It acts as a regulariser (jitter, like augmentation) but causes bugs.</div></details><details class="q"><summary><span>How do you run the net on a single example after training?</span></summary><div class="ans">Use fixed statistics: either calibrate them once over the training set, or use the running mean and std tracked during training.</div></details><details class="q"><summary><span>What is the difference between the parameters and the buffers of the layer?</span></summary><div class="ans">Parameters (γ, β) are trained by backprop. Buffers (running mean and std) are updated by a moving average and get no gradients.</div></details><details class="q"><summary><span>Why drop the bias in the Linear layer before a batch norm?</span></summary><div class="ans">The batch mean subtraction cancels it, so its gradient is zero. The β of the batch norm does that job.</div></details><details class="q"><summary><span>What does epsilon do?</span></summary><div class="ans">It is added to the variance so the division can't be by zero.</div></details><details class="q"><summary><span>Why might momentum 0.1 be risky for a batch of 32?</span></summary><div class="ans">Small batches give noisy mean and std estimates, so a fast running average can thrash instead of settling.</div></details><div class="oneline"><small>In one line</small>If you can answer these, batch norm is yours.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c33" data-title="What the first half taught us" data-num="33" data-track><header class="chead"><span class="num">33</span><h2>What the first half taught us</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=4440s" target="_blank" rel="noopener" title="Open the video at 74:00">&#9654; 74:00</a></header><div class="body">
+<p>His own summary of the lecture so far:</p>
+<ul>
+<li><b>Look at the activations and gradients</b>, especially as nets get bigger and deeper.</li>
+<li>At the output layer, <b>over-confident mistakes</b> create hockey-stick losses. Fix it and training does less wasteful work.</li>
+<li>Keep activations from <b>squashing to zero or exploding</b>. You want them fairly homogeneous: roughly Gaussian everywhere.</li>
+<li>Scale the weight matrices and biases at initialisation to get that. It gives a big boost, but it is <b>not enough for much deeper nets</b>.</li>
+<li>So we introduced <b>normalisation layers</b> (batch, layer, instance, group). We covered the first, batch norm, which sits among the layers and normalises with the batch.</li>
+<li>Batch norm needed lots of extras: gain and bias, running statistics for inference, no wasted bias.</li>
+</ul>
+<p>His warning: "I've shot myself in the foot with this layer over and over again. I don't want you to suffer the same." <b>Avoid it where you can.</b> Group norm and layer norm are more common in recent deep learning.</p>
+<p>Next time: <b>recurrent networks</b>, which are very deep once unrolled, so all this matters.</p>
+<div class="oneline"><small>In one line</small>Understand activations and gradients, control them at initialisation, and use normalisation layers; but be wary of batch norm.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p5" data-short="Bonus · Build it &amp; diagnose it"><div class="kicker">Part 5 · 1:18:00 – 1:55:57</div><h2>The PyTorch-style version, and the diagnostic plots</h2><p>He rebuilds everything as layers, then shows four plots that tell you if a network is healthy.</p></section><section class="concept" id="c34" data-title="Layers as classes: Linear" data-num="34" data-track><header class="chead"><span class="num">34</span><h2>Layers as classes: Linear</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=4770s" target="_blank" rel="noopener" title="Open the video at 79:30">&#9654; 79:30</a></header><div class="body">
+<p class="lead">Now the code is arranged like PyTorch: small <b>modules</b> that you can stack like Lego bricks.</p>
+<pre class="code" data-lang="python"><code>class Linear:
+    def __init__(self, fan_in, fan_out, bias=True):
+        self.weight = torch.randn((fan_in, fan_out), generator=g) / fan_in**0.5
+        self.bias = torch.zeros(fan_out) if bias else None
+
+    def __call__(self, x):
+        self.out = x @ self.weight
+        if self.bias is not None:
+            self.out += self.bias
+        return self.out
+
+    def parameters(self):
+        return [self.weight] + ([] if self.bias is None else [self.bias])</code></pre>
+<ul>
+<li>The same inputs as <code>nn.Linear</code>: <b>fan-in</b>, <b>fan-out</b>, and whether to have a bias.</li>
+<li>The weight is a Gaussian divided by <b>√fan_in</b>; the bias starts at zero.</li>
+<li>Calling the layer computes <code>x @ W (+ b)</code>. <code>parameters()</code> returns its tensors.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Linear stores a weight scaled by 1/√fan_in and a zero bias, and applies x @ W + b when called.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c35" data-title="Layers as classes: BatchNorm1d" data-num="35" data-track><header class="chead"><span class="num">35</span><h2>Layers as classes: BatchNorm1d</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=4860s" target="_blank" rel="noopener" title="Open the video at 81:00">&#9654; 81:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>class BatchNorm1d:
+    def __init__(self, dim, eps=1e-5, momentum=0.1):
+        self.eps = eps
+        self.momentum = momentum
+        self.training = True
+        # parameters (trained with backprop)
+        self.gamma = torch.ones(dim)
+        self.beta = torch.zeros(dim)
+        # buffers (trained with a running 'momentum update')
+        self.running_mean = torch.zeros(dim)
+        self.running_var = torch.ones(dim)
+
+    def __call__(self, x):
+        if self.training:
+            xmean = x.mean(0, keepdim=True)          # batch mean
+            xvar = x.var(0, keepdim=True)            # batch variance
+        else:
+            xmean = self.running_mean
+            xvar = self.running_var
+        xhat = (x - xmean) / torch.sqrt(xvar + self.eps)
+        self.out = self.gamma * xhat + self.beta
+        if self.training:
+            with torch.no_grad():
+                self.running_mean = (1 - self.momentum) * self.running_mean + self.momentum * xmean
+                self.running_var  = (1 - self.momentum) * self.running_var  + self.momentum * xvar
+        return self.out
+
+    def parameters(self):
+        return [self.gamma, self.beta]</code></pre>
+<ul>
+<li><b><code>self.training</code></b>: PyTorch modules have this flag because behaviour differs. In training use the batch statistics and update the running ones. In evaluation use the running ones and don't update.</li>
+<li>Only <b>gamma and beta</b> are returned by <code>parameters()</code>. The running values are <b>buffers</b>.</li>
+<li>He now tracks the <b>variance</b>, as in the paper, instead of the std. They are very similar.</li>
+<li><code>self.out</code> is <b>not</b> in real PyTorch. He keeps it so he can plot every layer's output later.</li>
+<li><code>torch.no_grad()</code> stops PyTorch building a graph for the buffer updates, since we never call backward on them.</li>
+</ul>
+<div class="oneline"><small>In one line</small>BatchNorm1d keeps γ and β as parameters and the running mean and variance as buffers, switching on a training flag.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c36" data-title="A Tanh class, and a deep stack of layers" data-num="36" data-track><header class="chead"><span class="num">36</span><h2>A Tanh class, and a deep stack of layers</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=5100s" target="_blank" rel="noopener" title="Open the video at 85:00">&#9654; 85:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>class Tanh:
+    def __call__(self, x):
+        self.out = torch.tanh(x)
+        return self.out
+    def parameters(self):
+        return []
+
+n_embd, n_hidden = 10, 100
+C = torch.randn((vocab_size, n_embd), generator=g)
+layers = [
+    Linear(n_embd * block_size, n_hidden), Tanh(),
+    Linear(n_hidden, n_hidden), Tanh(),
+    Linear(n_hidden, n_hidden), Tanh(),
+    Linear(n_hidden, n_hidden), Tanh(),
+    Linear(n_hidden, n_hidden), Tanh(),
+    Linear(n_hidden, vocab_size),
+]
+with torch.no_grad():
+    layers[-1].weight *= 0.1                 # last layer: less confident
+    for layer in layers[:-1]:
+        if isinstance(layer, Linear):
+            layer.weight *= 5/3              # the tanh gain
+
+parameters = [C] + [p for layer in layers for p in layer.parameters()]   # 46,497
+for p in parameters:
+    p.requires_grad = True</code></pre>
+<ul>
+<li>A <b>six-layer</b> MLP: five Linear + Tanh pairs, then a final Linear. With layers as objects it is just a <b>list</b>.</li>
+<li><b>46,497</b> parameters, collected with a double list comprehension.</li>
+<li>The forward pass becomes: <code>for layer in layers: x = layer(x)</code>, then the cross entropy.</li>
+<li>For debugging he adds <code>layer.out.retain_grad()</code> so the gradients of every layer's output stay available. It is for plotting only and would be removed afterwards.</li>
+<li>All plots below come from <b>one single step</b> of optimisation (a <code>break</code> after the first iteration).</li>
+</ul>
+<div class="oneline"><small>In one line</small>A deep MLP is just a list of Linear and Tanh objects; 46,497 parameters for six layers of width 100.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c37" data-title="Plot 1: forward activations" data-num="37" data-track><header class="chead"><span class="num">37</span><h2>Plot 1: forward activations</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=5220s" target="_blank" rel="noopener" title="Open the video at 87:00">&#9654; 87:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>for i, layer in enumerate(layers[:-1]):            # skip the output layer
+    if isinstance(layer, Tanh):
+        t = layer.out
+        print('layer %d (%10s): mean %+.2f, std %.2f, saturated: %.2f%%'
+              % (i, layer.__class__.__name__, t.mean(), t.std(), (t.abs() &gt; 0.97).float().mean()*100))
+        hy, hx = torch.histogram(t, density=True)
+        plt.plot(hx[:-1].detach(), hy.detach())</code></pre>
+<ul>
+<li>One coloured line per tanh layer. We look at tanh outputs because they live in a finite range, -1 to 1.</li>
+<li>"<b>Saturated</b>" = the share of outputs with |value| above <b>0.97</b>: those are in the tails and would stop gradients.</li>
+</ul>
+<table class="t"><tr><th>layer</th><th>1</th><th>3</th><th>5</th><th>7</th><th>9</th></tr>
+<tr><td>std</td><td class="m">0.75</td><td class="m">0.69</td><td class="m">0.67</td><td class="m">0.66</td><td class="m">0.66</td></tr>
+<tr><td>saturated</td><td class="m">20.3%</td><td class="m">8.4%</td><td class="m">6.6%</td><td class="m">5.5%</td><td class="m">6.1%</td></tr></table>
+<p>With gain 5/3 the layers <b>stabilise</b> at a std of about 0.65 and roughly <b>5%</b> saturation: a good range.</p>
+<div class="oneline"><small>In one line</small>With a gain of 5/3 the tanh outputs settle at std about 0.65 and about 5% saturation in every layer.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c38" data-title="Why a gain of 5/3?" data-num="38" data-track><header class="chead"><span class="num">38</span><h2>Why a gain of 5/3?</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=5310s" target="_blank" rel="noopener" title="Open the video at 88:30">&#9654; 88:30</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 760 238" role="img" aria-label="Effect of the gain on the activations through the layers"><line class="axis" x1="70" y1="190" x2="450" y2="190"/><line class="axis" x1="70" y1="30" x2="70" y2="190"/><line class="grid" x1="70" y1="154.4" x2="450" y2="154.4"/><text class="ts" x="62" y="158.44444444444446" text-anchor="end">0.2</text><line class="grid" x1="70" y1="118.9" x2="450" y2="118.9"/><text class="ts" x="62" y="122.88888888888889" text-anchor="end">0.4</text><line class="grid" x1="70" y1="83.3" x2="450" y2="83.3"/><text class="ts" x="62" y="87.33333333333334" text-anchor="end">0.6</text><line class="grid" x1="70" y1="47.8" x2="450" y2="47.8"/><text class="ts" x="62" y="51.77777777777777" text-anchor="end">0.8</text><text class="ts" x="100.0" y="208" text-anchor="middle">layer 1</text><text class="ts" x="180.0" y="208" text-anchor="middle">layer 3</text><text class="ts" x="260.0" y="208" text-anchor="middle">layer 5</text><text class="ts" x="340.0" y="208" text-anchor="middle">layer 7</text><text class="ts" x="420.0" y="208" text-anchor="middle">layer 9</text><polyline class="curve" points="100.0,56.7 180.0,67.3 260.0,70.9 340.0,72.7 420.0,72.7"/><circle class="pt acc" cx="100.0" cy="56.7" r="4.5"/><circle class="pt acc" cx="180.0" cy="67.3" r="4.5"/><circle class="pt acc" cx="260.0" cy="70.9" r="4.5"/><circle class="pt acc" cx="340.0" cy="72.7" r="4.5"/><circle class="pt acc" cx="420.0" cy="72.7" r="4.5"/><polyline class="curve warn" points="100.0,79.8 180.0,104.7 260.0,117.1 340.0,127.8 420.0,133.1"/><circle class="pt warn" cx="100.0" cy="79.8" r="4.5"/><circle class="pt warn" cx="180.0" cy="104.7" r="4.5"/><circle class="pt warn" cx="260.0" cy="117.1" r="4.5"/><circle class="pt warn" cx="340.0" cy="127.8" r="4.5"/><circle class="pt warn" cx="420.0" cy="133.1" r="4.5"/><text class="ts" x="10" y="18" text-anchor="start">std of the tanh outputs</text><rect class="box acc" x="490" y="30" width="260" height="70" rx="10"/><text class="t" x="620" y="54" text-anchor="middle">gain 5/3  →  stays near 0.66</text><text class="tm" x="620" y="76" text-anchor="middle">saturated: 20%, 8%, 7%, 5%, 6%</text><rect class="box warn" x="490" y="114" width="260" height="70" rx="10"/><text class="t" x="620" y="138" text-anchor="middle">gain 1  →  shrinks to 0.32</text><text class="tm" x="620" y="160" text-anchor="middle">saturated: 3.5%, 0.03%, then 0</text><text class="tm" x="380" y="224" text-anchor="middle">Six linear + tanh layers, no batch norm. Too small a gain: signals fade. Too big: tanh saturates.</text></svg><figcaption>Numbers from his printouts (layers 1, 3, 5, 7, 9 are the tanh layers).</figcaption></figure>
+<ul>
+<li><b>Gain 1</b> (no boost): the std shrinks layer by layer towards zero, and saturation goes to zero too. The first layer is fine, the later ones fade.</li>
+<li>Why: a stack of linear layers with 1/√fan_in preserves std, but the <b>tanh layers squash</b> the distribution, so some gain is needed to keep expanding it.</li>
+<li><b>Gain 3</b>: saturations become way too large.</li>
+<li>5/3 is a good setting for a sandwich of Linear and tanh.</li>
+</ul>
+<div class="callout why"><b class="ctitle">He is honest about it</b><div>He says he has no idea where 5/3 comes from. He searched briefly and found nothing. It simply works empirically: good ranges and about 5% saturation.</div></div>
+<div class="oneline"><small>In one line</small>A gain too low makes the signal fade, too high saturates the tanh, and 5/3 keeps it steady.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c39" data-title="Plot 2: gradients through the layers" data-num="39" data-track><header class="chead"><span class="num">39</span><h2>Plot 2: gradients through the layers</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=5460s" target="_blank" rel="noopener" title="Open the video at 91:00">&#9654; 91:00</a></header><div class="body">
+<p>The same loop, but on <code>layer.out.grad</code> (the gradient at each layer's output), plotting its histogram, mean and std.</p>
+<ul>
+<li>What we want: <b>every layer has roughly the same gradient distribution</b>. Not shrinking, not exploding.</li>
+<li>With gain 5/3 this looks reasonable.</li>
+<li>Gain <b>0.5</b> (too small): activations shrink to zero, and the gradients do something odd, <b>expanding</b> out.</li>
+<li>Gain <b>3</b> (too large): an <b>asymmetry</b>: the gradients differ more and more as you go to deeper layers.</li>
+</ul>
+<p>The lesson: without batch norm the gains must be set very carefully to get good activations in <b>both</b> the forward and the backward pass.</p>
+<div class="oneline"><small>In one line</small>Healthy gradients look the same at every layer; a wrong gain makes them shrink or blow up with depth.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c40" data-title="What if there is no tanh at all?" data-num="40" data-track><header class="chead"><span class="num">40</span><h2>What if there is no tanh at all?</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=5550s" target="_blank" rel="noopener" title="Open the video at 92:30">&#9654; 92:30</a></header><div class="body">
+<p>Remove every tanh but keep the gain at 5/3: a giant <b>linear sandwich</b>.</p>
+<ul>
+<li>The correct gain here is <b>exactly 1</b>, the std-preserving one. 5/3 is too high.</li>
+<li>With 5/3: the activations start tight and become <b>very diffuse</b> by layer 4. The gradients go the other way and <b>diminish</b> in the deeper layers: an asymmetry. Imagine this with 50 layers.</li>
+<li>Too large a gain does this, too small does the opposite. Before batch norm this was "incredibly tricky" to set.</li>
+</ul>
+<p><b>So why have tanh at all?</b> A stack of linear layers <b>collapses into one linear layer</b>: all the <code>Wx + b</code> merge into a single <code>Wx + b</code>. The forward function is just linear, however many layers there are.</p>
+<ul>
+<li>Interestingly the <b>training dynamics</b> still differ, because the chain rule behaves differently. There are papers on infinitely deep linear networks.</li>
+<li>The tanh is what turns the sandwich into a network that can, in principle, <b>approximate any function</b>.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Without nonlinearities the right gain is 1, and the layers would collapse into a single linear function anyway.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c41" data-title="Plot 3: weights, gradients and their ratio" data-num="41" data-track><header class="chead"><span class="num">41</span><h2>Plot 3: weights, gradients and their ratio</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=5880s" target="_blank" rel="noopener" title="Open the video at 98:00">&#9654; 98:00</a></header><div class="body">
+<p>What we actually update are the <b>parameters</b>, so we also plot them. Only the 2-D ones (the weight matrices), skipping biases and the batch norm numbers for simplicity.</p>
+<ul>
+<li>For each weight: its shape, mean, std, a histogram, and the <b>gradient-to-data ratio</b>: the size of the gradient compared with the size of the values.</li>
+<li>That matters because a step is <b>learning rate × gradient</b> added to the data. If the gradient is large compared with the data, you are in trouble.</li>
+<li>Here the gradients are about <b>1000 times smaller</b> than the data, for most layers.</li>
+<li>The <b>last layer</b> is a troublemaker. Its gradient std is about <b>1e-2</b> where the others are about <b>1e-3</b>: roughly <b>10 times bigger</b>. With plain SGD it would train about 10 times faster than the rest at the start.</li>
+<li>This evens out a bit after more steps (he reruns for 1,000 steps and the tails of the last layer come in). It would matter most with simple SGD instead of an optimiser like Adam.</li>
+</ul>
+<div class="oneline"><small>In one line</small>The shrunk output layer gets gradients about 10 times larger than the other layers at initialisation.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c42" data-title="Plot 4: update-to-data ratio over time" data-num="42" data-track><header class="chead"><span class="num">42</span><h2>Plot 4: update-to-data ratio over time</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=6000s" target="_blank" rel="noopener" title="Open the video at 100:00">&#9654; 100:00</a></header><div class="body">
+<p class="lead">What really matters is not the gradient-to-data ratio but the <b>update-to-data ratio</b>: how much the values actually change on each step.</p>
+<pre class="code" data-lang="python"><code>ud = []                                          # a list we fill at every step
+
+# inside the training loop, after the update:
+with torch.no_grad():
+    ud.append([((lr * p.grad).std() / p.data.std()).log10().item() for p in parameters])</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 760 240" role="img" aria-label="Update-to-data ratio over time"><line class="axis" x1="70" y1="200" x2="700" y2="200"/><line class="axis" x1="70" y1="30" x2="70" y2="200"/><line class="grid" x1="70" y1="53.0" x2="700" y2="53.0"/><text class="ts" x="62" y="56.97297297297297" text-anchor="end">−1</text><line class="grid" x1="70" y1="98.9" x2="700" y2="98.9"/><text class="ts" x="62" y="102.91891891891892" text-anchor="end">−2</text><line class="grid" x1="70" y1="144.9" x2="700" y2="144.9"/><text class="ts" x="62" y="148.86486486486484" text-anchor="end">−3</text><line class="grid" x1="70" y1="190.8" x2="700" y2="190.8"/><text class="ts" x="62" y="194.8108108108108" text-anchor="end">−4</text><polyline class="curve warn thin" points="70.0,84.0 80.5,80.7 91.0,83.0 101.5,79.4 112.0,71.2 122.5,68.4 133.0,65.4 143.5,64.4 154.0,59.0 164.5,59.3 175.0,59.7 185.5,62.7 196.0,61.2 206.5,61.7 217.0,59.9 227.5,58.4 238.0,59.0 248.5,61.8 259.0,62.7 269.5,64.2 280.0,65.9 290.5,66.2 301.0,63.7 311.5,64.9 322.0,64.8 332.5,61.7 343.0,64.4 353.5,64.4 364.0,66.8 374.5,68.4 385.0,66.7 395.5,68.2 406.0,66.1 416.5,63.2 427.0,65.6 437.5,69.0 448.0,64.7 458.5,65.6 469.0,66.2 479.5,65.4 490.0,66.6 500.5,66.7 511.0,69.8 521.5,66.0 532.0,66.4 542.5,71.8 553.0,68.3 563.5,68.8 574.0,70.7 584.5,70.5 595.0,71.0 605.5,68.5 616.0,71.5 626.5,69.6 637.0,73.0 647.5,69.8 658.0,70.0 668.5,73.1 679.0,72.7 689.5,70.7 700.0,72.2"/><polyline class="curve thin" points="70.0,151.4 80.5,149.4 91.0,145.0 101.5,138.9 112.0,138.6 122.5,130.1 133.0,130.5 143.5,122.7 154.0,122.8 164.5,118.6 175.0,120.2 185.5,121.4 196.0,121.3 206.5,120.4 217.0,120.8 227.5,122.5 238.0,123.2 248.5,121.2 259.0,118.4 269.5,120.4 280.0,123.9 290.5,119.0 301.0,119.6 311.5,118.4 322.0,123.0 332.5,119.4 343.0,123.7 353.5,119.9 364.0,122.3 374.5,122.5 385.0,118.3 395.5,123.2 406.0,120.5 416.5,118.4 427.0,122.2 437.5,122.4 448.0,118.1 458.5,121.0 469.0,119.0 479.5,123.4 490.0,121.2 500.5,122.4 511.0,119.2 521.5,122.9 532.0,117.3 542.5,123.2 553.0,118.7 563.5,123.2 574.0,121.6 584.5,118.0 595.0,122.2 605.5,122.0 616.0,118.7 626.5,120.6 637.0,122.8 647.5,116.6 658.0,122.0 668.5,122.7 679.0,120.7 689.5,118.9 700.0,118.0"/><polyline class="curve thin" points="70.0,163.0 80.5,157.9 91.0,156.2 101.5,149.8 112.0,144.1 122.5,140.6 133.0,135.8 143.5,133.1 154.0,128.7 164.5,129.8 175.0,131.3 185.5,132.8 196.0,130.0 206.5,132.3 217.0,133.6 227.5,131.4 238.0,128.7 248.5,133.5 259.0,130.5 269.5,131.8 280.0,131.0 290.5,133.4 301.0,128.1 311.5,132.6 322.0,130.4 332.5,131.6 343.0,134.2 353.5,130.7 364.0,133.4 374.5,133.9 385.0,134.1 395.5,133.3 406.0,133.7 416.5,130.2 427.0,131.0 437.5,128.0 448.0,128.3 458.5,127.9 469.0,132.8 479.5,131.4 490.0,132.7 500.5,130.5 511.0,130.3 521.5,129.2 532.0,129.7 542.5,132.6 553.0,131.6 563.5,130.9 574.0,134.3 584.5,134.1 595.0,131.7 605.5,133.6 616.0,129.6 626.5,132.7 637.0,133.7 647.5,133.1 658.0,132.8 668.5,132.9 679.0,130.9 689.5,131.3 700.0,132.3"/><polyline class="curve info thin" points="70.0,178.0 80.5,177.0 91.0,168.7 101.5,164.6 112.0,162.4 122.5,160.5 133.0,156.3 143.5,152.1 154.0,151.7 164.5,149.3 175.0,148.5 185.5,150.7 196.0,151.2 206.5,146.5 217.0,149.2 227.5,148.2 238.0,145.5 248.5,147.4 259.0,149.4 269.5,144.9 280.0,148.7 290.5,150.9 301.0,146.6 311.5,150.3 322.0,148.9 332.5,145.4 343.0,146.4 353.5,150.5 364.0,147.6 374.5,147.8 385.0,147.3 395.5,149.0 406.0,146.4 416.5,149.7 427.0,148.2 437.5,147.6 448.0,143.9 458.5,149.3 469.0,144.9 479.5,148.5 490.0,145.9 500.5,147.0 511.0,146.5 521.5,144.5 532.0,146.8 542.5,148.4 553.0,148.4 563.5,148.6 574.0,143.5 584.5,144.8 595.0,142.7 605.5,144.3 616.0,148.5 626.5,144.4 637.0,143.5 647.5,143.8 658.0,145.2 668.5,146.0 679.0,145.3 689.5,143.0 700.0,146.4"/><line class="dash" x1="70" y1="144.9" x2="700" y2="144.9"/><text class="t" x="700" y="183.9189189189189" text-anchor="end">dashed line: target ≈ −3  (update ≈ 1/1000 of the weight)</text><text class="tm" x="84" y="43.567567567567565" text-anchor="start">last layer (we shrank it ×0.1, so it starts high)</text><text class="ts" x="10" y="18" text-anchor="start">log10( update std ÷ weight std )</text><text class="ts" x="390" y="226" text-anchor="middle">training steps →</text></svg><figcaption>Schematic shaped like his plot. Most layers hover near −3; the shrunk output layer starts far above.</figcaption></figure>
+<ul>
+<li>For each parameter: the std of the update (<code>lr × grad</code>) divided by the std of the data, then <b>log10</b> so we read exponents.</li>
+<li>Plot this against steps, for the weight matrices, with a dashed line at <b>−3</b>.</li>
+<li>Rule of thumb: the ratio should be about <b>1e-3</b> (log10 ≈ −3). Each step changes a weight by about a thousandth of its size.</li>
+<li><b>Well below −3</b> usually means the parameters are <b>not training fast enough</b>, so the learning rate is too low. <b>Well above</b> means updates are too big.</li>
+<li>The last layer starts high only because we artificially shrank it ×0.1. It settles as it learns.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Keep the update-to-data ratio near 1e-3 (about −3 on the log10 plot): below means too slow, above too fast.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c43" data-title="Too low a learning rate, and other miscalibration" data-num="43" data-track><header class="chead"><span class="num">43</span><h2>Too low a learning rate, and other miscalibration</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=6270s" target="_blank" rel="noopener" title="Open the video at 104:30">&#9654; 104:30</a></header><div class="body">
+<p><b>A learning rate that is too low.</b> Set <code>lr = 0.001</code> and the update plot drops far below the −3 line: each update is about <b>10,000 times</b> smaller than the numbers it changes. A symptom of training way too slowly, and another way to sense the right learning rate.</p>
+<p><b>A forgotten fan-in normalisation.</b> Sample the weights straight from a Gaussian with no 1/√fan_in. Now the plots shout:</p>
+<ul>
+<li>the activations: neurons are way too saturated.</li>
+<li>the gradients are "all messed up".</li>
+<li>the weight histograms are asymmetric.</li>
+<li>the update ratios differ a lot between layers: some layers learn <b>way too fast</b>, far above −3.</li>
+</ul>
+<p>"This is how miscalibrations of your neural nets manifest", and these plots bring them to your attention so you can address them.</p>
+<div class="oneline"><small>In one line</small>A too-low rate shows as ratios far under −3, and a missing fan-in scaling shows up in every plot.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c44" data-title="Add batch norm to the sandwich" data-num="44" data-track><header class="chead"><span class="num">44</span><h2>Add batch norm to the sandwich</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=6480s" target="_blank" rel="noopener" title="Open the video at 108:00">&#9654; 108:00</a></header><div class="body">
+<p>So far it felt like "balancing a pencil on your finger": the gain must be exactly right. Now put batch norm in.</p>
+<pre class="code" data-lang="python"><code>layers = [
+    Linear(n_embd * block_size, n_hidden), BatchNorm1d(n_hidden), Tanh(),
+    Linear(n_hidden, n_hidden),            BatchNorm1d(n_hidden), Tanh(),
+    Linear(n_hidden, n_hidden),            BatchNorm1d(n_hidden), Tanh(),
+    Linear(n_hidden, n_hidden),            BatchNorm1d(n_hidden), Tanh(),
+    Linear(n_hidden, n_hidden),            BatchNorm1d(n_hidden), Tanh(),
+    Linear(n_hidden, vocab_size),          BatchNorm1d(vocab_size),
+]
+with torch.no_grad():
+    layers[-1].gamma *= 0.1          # last layer: scale gamma, not the weight
+    for layer in layers[:-1]:
+        if isinstance(layer, Linear):
+            layer.weight *= 5/3
+# 47,551 parameters</code></pre>
+<ul>
+<li>The usual spot: <b>right after the linear layer, before the nonlinearity</b>. Placing it after the nonlinearity gives "very similar results". It is also fine to put one at the very end, before the loss.</li>
+<li>With a batch norm as the last layer, we make the softmax less confident by shrinking <b>gamma</b>, because γ multiplies the normalised output.</li>
+<li>The activation plot now looks very good, "necessarily": there is a normalisation before every tanh. About <b>0.65 std and 2% saturation</b>, equal in all layers.</li>
+<li>Gradients, weights and update ratios look homogeneous too. The updates go a little above −3, but all parameters train at about the same rate.</li>
+</ul>
+<div class="oneline"><small>In one line</small>With batch norm after every linear layer, the activations, gradients and updates all look uniform across depth.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c45" data-title="Batch norm makes the gain forgiving" data-num="45" data-track><header class="chead"><span class="num">45</span><h2>Batch norm makes the gain forgiving</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=6570s" target="_blank" rel="noopener" title="Open the video at 109:30">&#9654; 109:30</a></header><div class="body">
+<p>What we gain: much less brittleness about the weight scale.</p>
+<ul>
+<li>Change the gain of the linear layers (for example to 0.2). The <b>activations are completely unaffected</b>, because of the explicit normalisation. Gradients and weight gradients still look okay.</li>
+<li>But the <b>update ratios change</b>. The scale of the incoming activations interacts with the batch norm's backward pass, so the effective step size moves. So you may need to <b>retune the learning rate</b>.</li>
+<li>With bigger gains the updates come out lower; so there is still no completely free pass on the weights.</li>
+<li>Remove the fan-in scaling too (plain random weights, no gain): the forward and backward statistics still look fine, with slightly fat tails on a few layers.</li>
+<li>But the update ratios are well below −3, by about a factor of ten. The fix: raise the <b>learning rate about 10×</b> (from 0.1 to 1.0), and then everything is in range again.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Batch norm makes activations robust to the weight scale, but you may have to retune the learning rate.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c46" data-title="What he set out to do, and what he did not" data-num="46" data-track><header class="chead"><span class="num">46</span><h2>What he set out to do, and what he did not</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=6780s" target="_blank" rel="noopener" title="Open the video at 113:00">&#9654; 113:00</a></header><div class="body">
+<p><b>Three goals achieved:</b></p>
+<ol>
+<li>Introduce <b>batch norm</b>, one of the first modern innovations to stabilise very deep nets, and how it is used.</li>
+<li><b>PyTorch-ify</b> the code into modules (Linear, BatchNorm1d, Tanh) that stack like Lego. His API matches PyTorch's, so you could use <code>torch.nn.Linear</code> and friends instead (put <code>nn.</code> in front) and it would work.</li>
+<li>Introduce the <b>diagnostic tools</b>: histograms and statistics of forward activations, backward gradients, weights, and the update-to-data ratio. Look at them <b>over time</b>, not just one snapshot, and keep updates near 1e-3 (−3 on the log scale).</li>
+</ol>
+<p><b>Not achieved, on purpose:</b></p>
+<ul>
+<li>He did <b>not</b> beat the previous loss. He tried batch norm with the learning-rate search, and got very similar results. The limit is not optimisation but the <b>context length</b>: only 3 characters to predict the 4th. We need <b>RNNs and Transformers</b> for more.</li>
+<li>He did not fully explain all the activation and gradient statistics, for instance why changing the gain needs a different learning rate. That needs the backward pass of each layer, and "there's still a lot of work remaining on the intuitive level".</li>
+</ul>
+<p>"We haven't solved initialisation and we haven't solved backpropagation": these are active research. But we have tools to tell whether things are on the right track.</p>
+<div class="oneline"><small>In one line</small>Tools to diagnose a network, not a better score: the bottleneck is now the 3-character context.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="t5" data-title="Test 5: diagnosing a network" data-num="T5" data-track><header class="chead"><span class="num">T5</span><h2>Test 5: diagnosing a network</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=6957s" target="_blank" rel="noopener" title="Open the video at 115:57">&#9654; 115:57</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>What four plots does he use, and what is each looking for?</span></summary><div class="ans">Forward activations (std and % saturated), backward gradients (similar across layers), weights with their gradient-to-data ratio, and the update-to-data ratio over time (about −3 on a log10 scale).</div></details><details class="q"><summary><span>What do 'saturated: 5%' and 'std 0.65' mean for the tanh layers?</span></summary><div class="ans">About 5% of outputs are in the flat tails (|t| > 0.97), and the spread of outputs is stable at about 0.65. That is the healthy range.</div></details><details class="q"><summary><span>What happens with gain 1 and with gain 3 in the Linear + tanh stack?</span></summary><div class="ans">Gain 1: the std shrinks layer by layer towards 0. Gain 3: the tanh layers saturate far too much.</div></details><details class="q"><summary><span>What is the update-to-data ratio and what should it be?</span></summary><div class="ans">std of (lr × grad) divided by std of the data, shown as log10. It should be near −3, i.e. updates about a thousandth of the weights.</div></details><details class="q"><summary><span>What does a ratio far below −3 tell you?</span></summary><div class="ans">The parameters are training too slowly, so the learning rate is probably too low.</div></details><details class="q"><summary><span>Why does the last layer cause trouble at initialisation?</span></summary><div class="ans">It was shrunk by 0.1, so its gradient and update ratio are far larger than the rest (about 10× larger gradients).</div></details><details class="q"><summary><span>What does batch norm make less sensitive, and what must you still watch?</span></summary><div class="ans">The activations no longer depend on the weight gain, but the update scale changes, so the learning rate may need retuning.</div></details><details class="q"><summary><span>Why didn't batch norm improve his loss?</span></summary><div class="ans">The model is limited not by optimisation but by its 3-character context, which needs recurrent nets or Transformers.</div></details><div class="oneline"><small>In one line</small>If you can answer these, the whole lecture is yours.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p6" data-short="Cheat sheet"><div class="kicker">Cheat sheet</div><h2>Everything on one page</h2><p>A health checklist, the key numbers, gotchas, code snippets and words to know.</p></section><section class="concept" id="s1" data-title="Is my network healthy? A checklist" data-num="★"><header class="chead"><span class="num">★</span><h2>Is my network healthy? A checklist</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=5880s" target="_blank" rel="noopener" title="Open the video at 98:00">&#9654; 98:00</a></header><div class="body">
+<table class="t"><tr><th>check</th><th>healthy</th><th>if not</th></tr>
+<tr><td>loss at step 0</td><td class="m">≈ −ln(1/vocab) = 3.30</td><td>shrink the last layer: W × 0.01, b = 0</td></tr>
+<tr><td>logits at init</td><td class="m">≈ 0 (equal)</td><td>same fix</td></tr>
+<tr><td>tanh outputs</td><td class="m">std ≈ 0.65, saturated ≲ 5%</td><td>fix the gain / weight scale, or add batch norm</td></tr>
+<tr><td>dead neurons</td><td class="m">no all-white column</td><td>better init, lower learning rate, leaky ReLU</td></tr>
+<tr><td>gradients per layer</td><td class="m">similar in every layer</td><td>gain too high or too low</td></tr>
+<tr><td>loss curve start</td><td class="m">no hockey stick</td><td>output layer was too confident</td></tr>
+<tr><td>update ÷ data (log10)</td><td class="m">≈ −3</td><td>below: raise the learning rate; above: lower it</td></tr></table>
+<div class="oneline"><small>In one line</small>Seven quick checks: starting loss, logits, saturation, dead neurons, gradients, loss curve, update ratio.</div></div></section><section class="concept" id="s2" data-title="Numbers worth remembering" data-num="★"><header class="chead"><span class="num">★</span><h2>Numbers worth remembering</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=2400s" target="_blank" rel="noopener" title="Open the video at 40:00">&#9654; 40:00</a></header><div class="body">
+<table class="t"><tr><th>what</th><th>value</th></tr>
+<tr><td>expected starting loss, 27 classes</td><td class="m">3.2958</td></tr>
+<tr><td>actual starting loss before the fix</td><td class="m">27.88</td></tr>
+<tr><td>after W2 × 0.1 / × 0.01</td><td class="m">4.23 / 3.32</td></tr>
+<tr><td>val loss: original</td><td class="m">2.17 (train 2.12)</td></tr>
+<tr><td>val loss: softmax fix · tanh fix</td><td class="m">2.13 · 2.10</td></tr>
+<tr><td>with batch norm</td><td class="m">train 2.0668 · val 2.1048</td></tr>
+<tr><td>x std → (x @ w) std, w unit Gaussian, fan-in 10</td><td class="m">1 → about 3</td></tr>
+<tr><td>after dividing by √10</td><td class="m">1.01</td></tr>
+<tr><td>gain: linear · ReLU · tanh</td><td class="m">1 · √2 · 5/3</td></tr>
+<tr><td>(5/3) ÷ √30</td><td class="m">0.30</td></tr>
+<tr><td>parameters: base · + batch norm · − b1</td><td class="m">11,897 · 12,297 · 12,097</td></tr>
+<tr><td>deep sandwich: no BN · with BN</td><td class="m">46,497 · 47,551</td></tr>
+<tr><td>running-average rule</td><td class="m">0.999 old + 0.001 new</td></tr>
+<tr><td>PyTorch BatchNorm1d defaults</td><td class="m">eps 1e-5 · momentum 0.1</td></tr>
+<tr><td>tanh saturation threshold (plots)</td><td class="m">|t| &gt; 0.97</td></tr>
+<tr><td>update-to-data target</td><td class="m">1e-3 (−3 on log10)</td></tr></table>
+<div class="oneline"><small>In one line</small>The story in numbers: 27.9 at the start, 3.3 expected, 2.17 down to 2.10 after the fixes.</div></div></section><section class="concept" id="s3" data-title="Gotchas he points out" data-num="★"><header class="chead"><span class="num">★</span><h2>Gotchas he points out</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=3030s" target="_blank" rel="noopener" title="Open the video at 50:30">&#9654; 50:30</a></header><div class="body">
+<ol>
+<li><b>A starting loss far above −ln(1/vocab)</b> means a confidently wrong net. Fix the last layer's scale.</li>
+<li><b>Don't set weights exactly to zero.</b> Use small random values.</li>
+<li><b>Saturated tanh, dead ReLU:</b> flat regions give zero gradient. Look for a fully white column.</li>
+<li><b>Use fan-in 30, not 10,</b> when 3 characters × 10 numbers feed the layer.</li>
+<li><b>The bias before a batch norm is useless.</b> Use <code>bias=False</code>.</li>
+<li><b>Batch norm couples the examples in a batch.</b> It causes bugs; prefer layer or group norm when you can.</li>
+<li><b>Single-example inference needs fixed statistics:</b> running mean and std.</li>
+<li><b>The running averages are buffers, not parameters.</b> Update them under <code>no_grad</code>.</li>
+<li><b>Momentum 0.1 may be too fast for tiny batches</b> (like 32).</li>
+<li><b>With batch norm, a different weight scale means a different effective learning rate.</b> Re-check the update ratio.</li>
+<li><b>Look at the plots over time,</b> not one frozen step.</li>
+</ol>
+<div class="oneline"><small>In one line</small>Most traps are about initial scales, flat activation regions, and batch norm's coupled examples.</div></div></section><section class="concept" id="s4" data-title="Diagnostic snippets" data-num="★"><header class="chead"><span class="num">★</span><h2>Diagnostic snippets</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=5220s" target="_blank" rel="noopener" title="Open the video at 87:00">&#9654; 87:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code># 1. tanh saturation (white map) for a hidden layer h
+plt.imshow(h.abs() &gt; 0.99, cmap='gray', interpolation='nearest')
+
+# 2. forward activations: mean, std, % saturated, per tanh layer
+t = layer.out
+print(t.mean(), t.std(), (t.abs() &gt; 0.97).float().mean() * 100)
+
+# 3. backward gradients of each layer's output (needs layer.out.retain_grad())
+t = layer.out.grad
+print(t.mean(), t.std())
+
+# 4. update-to-data ratio, appended every step, then plotted per weight matrix
+with torch.no_grad():
+    ud.append([((lr * p.grad).std() / p.data.std()).log10().item() for p in parameters])
+plt.plot([ud[j][i] for j in range(len(ud))])
+plt.plot([0, len(ud)], [-3, -3], 'k')            # the ~1e-3 reference line</code></pre>
+<div class="oneline"><small>In one line</small>Four snippets: saturation map, forward stats, gradient stats, update-to-data ratio.</div></div></section><section class="concept" id="s5" data-title="Words to know" data-num="★"><header class="chead"><span class="num">★</span><h2>Words to know</h2><a class="time" href="https://www.youtube.com/watch?v=P6sfmUTpUmc&amp;t=0s" target="_blank" rel="noopener" title="Open the video at 0:00">&#9654; 0:00</a></header><div class="body">
+<table class="t"><tr><th>word</th><th>meaning here</th></tr>
+<tr><td><b>activation</b></td><td>the number a neuron or layer outputs</td></tr>
+<tr><td><b>pre-activation</b></td><td>the number going into the nonlinearity</td></tr>
+<tr><td><b>saturated</b></td><td>a tanh output stuck near ±1, where the gradient is almost zero</td></tr>
+<tr><td><b>dead neuron</b></td><td>a neuron that never activates, so it never learns</td></tr>
+<tr><td><b>fan-in / fan-out</b></td><td>number of inputs / outputs of a layer</td></tr>
+<tr><td><b>gain</b></td><td>an extra weight factor that compensates for a nonlinearity's squashing</td></tr>
+<tr><td><b>Kaiming (He) init</b></td><td>weights with std = gain / √fan_in</td></tr>
+<tr><td><b>hockey-stick loss</b></td><td>a quick drop at the start, from squashing oversized weights</td></tr>
+<tr><td><b>batch norm</b></td><td>standardise each neuron over the batch, then scale and shift</td></tr>
+<tr><td><b>γ (gamma), β (beta)</b></td><td>the learnable gain and bias of batch norm</td></tr>
+<tr><td><b>buffer</b></td><td>a tensor in a module that is updated without gradients (running mean, std)</td></tr>
+<tr><td><b>running mean / std</b></td><td>moving averages used at inference</td></tr>
+<tr><td><b>regulariser</b></td><td>something that makes overfitting harder</td></tr>
+<tr><td><b>update-to-data ratio</b></td><td>size of a step compared with the weights it changes</td></tr></table>
+<div class="oneline"><small>In one line</small>If a word here feels fuzzy, jump back to its card.</div></div></section>
+</main>
+</div>
+<div class="fnav" role="navigation" aria-label="Concept navigation"><div class="fbar"><i id="fbar"></i></div>
+<div class="frow"><button class="btn" id="fprev" type="button">← Back</button><span class="flab" id="flab"></span><button class="btn primary" id="fnext" type="button">Next →</button></div></div>
+<script>
+(function(){
+  var KEY='makemore-part3-notes-v1';
+  var st={bionic:true,focus:false,theme:null,done:{}};
+  try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);for(var k in o)st[k]=o[k];}}catch(e){}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
+  var root=document.documentElement;
+  var $=function(s,c){return (c||document).querySelector(s)};
+  var $$=function(s,c){return [].slice.call((c||document).querySelectorAll(s))};
+
+  /* ---------- code highlighting (tiny Python tokenizer) */
+  var RE=/(#[^\n]*)|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|\b(\d+(?:\.\d+)?)\b|\b(def|for|in|while|if|else|break|import|as|from|return|lambda|and|or|not|True|False|None)\b|\b(zip|print|range|sum|len|min|max|sorted|list|set|enumerate|open|float|int|isinstance|super)\b/g;
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  $$('pre.code code').forEach(function(c){
+    var t=c.textContent,out='',last=0,m;RE.lastIndex=0;
+    while((m=RE.exec(t))){
+      out+=esc(t.slice(last,m.index));
+      var cls=m[1]?'c':m[2]?'s':m[3]?'n':m[4]?'k':m[5]?'f':'f';
+      out+='<span class="tk-'+cls+'">'+esc(m[0])+'</span>';
+      last=m.index+m[0].length;
+    }
+    out+=esc(t.slice(last));c.innerHTML=out;
+  });
+
+  /* ---------- bionic reading: bold the start of each word (switch is CSS-only afterwards) */
+  var WORD=/[A-Za-zÀ-ɏ][A-Za-zÀ-ɏ'’]*/g;
+  function wrap(text){
+    var f=document.createDocumentFragment(),last=0;
+    text.replace(WORD,function(m,off){
+      if(off>last)f.appendChild(document.createTextNode(text.slice(last,off)));
+      var n=Math.max(1,Math.ceil(m.length*0.45)),b=document.createElement('b');
+      b.className='bn';b.textContent=m.slice(0,n);f.appendChild(b);
+      if(m.length>n)f.appendChild(document.createTextNode(m.slice(n)));
+      last=off+m.length;return m;
+    });
+    if(last<text.length)f.appendChild(document.createTextNode(text.slice(last)));
+    return f;
+  }
+  var SKIP='code,pre,svg,button,h1,h2,h3,h4,.shape,.chip,.time,.num,.kicker,.ctitle,b,strong,script,style,.formula,.nobn,th';
+  var walker=document.createTreeWalker($('main'),NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+    if(!n.nodeValue.trim())return NodeFilter.FILTER_REJECT;
+    var p=n.parentElement;if(!p||p.closest(SKIP))return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;}});
+  var nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(function(n){n.parentNode.replaceChild(wrap(n.nodeValue),n);});
+
+  /* ---------- table of contents */
+  var concepts=$$('.concept'),toc=$('#toc'),tocLinks=[];
+  var partOf={};
+  var cur=-1,part=null,idx=0;
+  $$('main > .part, main > .concept').forEach(function(el){
+    if(el.classList.contains('part')){
+      var h=document.createElement('h3');h.textContent=el.getAttribute('data-short');toc.appendChild(h);
+    }else{
+      var a=document.createElement('a');a.href='#'+el.id;
+      var num=el.getAttribute('data-num');
+      a.innerHTML='<span class="n">'+(num||'')+'</span><span>'+esc(el.getAttribute('data-title'))+'</span>';
+      a.addEventListener('click',function(e){
+        var i=concepts.indexOf(el);
+        if(root.getAttribute('data-focus')==='on'){e.preventDefault();setCurrent(i,true);}
+        toc.classList.remove('open');
+      });
+      toc.appendChild(a);tocLinks.push(a);
+    }
+  });
+
+  /* ---------- done tracking */
+  var trackable=concepts.filter(function(c){return c.hasAttribute('data-track');});
+  function refreshDone(){
+    var n=0;
+    concepts.forEach(function(c,i){
+      var d=!!st.done[c.id];
+      c.classList.toggle('done',d);
+      tocLinks[i].classList.toggle('done',d);
+      var b=$('.done-btn',c);if(b){b.textContent=d?'✓ Got it':'Mark as got it';}
+      if(d&&c.hasAttribute('data-track'))n++;
+    });
+    $('#progText').textContent=n+' / '+trackable.length+' got it';
+    $('#progBar').style.width=(trackable.length?n/trackable.length*100:0)+'%';
+  }
+  $$('.done-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      var c=b.closest('.concept');st.done[c.id]=!st.done[c.id];save();refreshDone();
+    });
+  });
+  var rs=$('#resetBtn');if(rs)rs.addEventListener('click',function(){
+    if(confirm('Clear all your "got it" ticks?')){st.done={};save();refreshDone();}
+  });
+
+  /* ---------- current concept + focus mode */
+  var fnav=$('.fnav'),fprev=$('#fprev'),fnext=$('#fnext'),flab=$('#flab'),fbar=$('#fbar');
+  function updateNav(){
+    tocLinks.forEach(function(a,i){a.classList.toggle('active',i===cur);});
+    if(cur<0)return;
+    flab.textContent=(cur+1)+' / '+concepts.length+' · '+concepts[cur].getAttribute('data-title');
+    fbar.style.width=((cur+1)/concepts.length*100)+'%';
+    fprev.disabled=cur===0;
+    fnext.textContent=cur===concepts.length-1?'Back to top ↑':'Next →';
+  }
+  function setCurrent(i,scroll){
+    cur=Math.max(0,Math.min(i,concepts.length-1));
+    concepts.forEach(function(c,k){c.classList.toggle('current',k===cur);});
+    updateNav();
+    if(scroll){var y=concepts[cur].getBoundingClientRect().top+window.scrollY-84;window.scrollTo({top:Math.max(0,y)});}
+  }
+  function visibleIndex(){
+    var f=0;concepts.forEach(function(c,i){if(c.getBoundingClientRect().top<=window.innerHeight*0.35)f=i;});return f;
+  }
+  var ticking=false;
+  window.addEventListener('scroll',function(){
+    if(root.getAttribute('data-focus')==='on'||ticking)return;ticking=true;
+    requestAnimationFrame(function(){ticking=false;var v=visibleIndex();if(v!==cur){cur=v;concepts.forEach(function(c,k){c.classList.toggle('current',k===cur);});updateNav();}});
+  },{passive:true});
+  fprev.addEventListener('click',function(){setCurrent(cur-1,true);});
+  fnext.addEventListener('click',function(){
+    if(cur>=concepts.length-1){window.scrollTo({top:0});setCurrent(0,false);}else setCurrent(cur+1,true);
+  });
+  document.addEventListener('keydown',function(e){
+    if(root.getAttribute('data-focus')!=='on'||e.metaKey||e.ctrlKey||e.altKey)return;
+    if(e.key==='ArrowRight'){setCurrent(cur+1,true);}
+    if(e.key==='ArrowLeft'){setCurrent(cur-1,true);}
+  });
+
+  /* ---------- toolbar */
+  function sync(){
+    root.setAttribute('data-bionic',st.bionic?'on':'off');
+    root.setAttribute('data-focus',st.focus?'on':'off');
+    var th=st.theme||(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    root.setAttribute('data-theme',th);
+    [['#bionicBtn',st.bionic],['#focusBtn',st.focus]].forEach(function(p){
+      var b=$(p[0]);b.setAttribute('aria-pressed',String(p[1]));$('.st',b).textContent=p[1]?'On':'Off';
+    });
+  }
+  $('#bionicBtn').addEventListener('click',function(){st.bionic=!st.bionic;save();sync();});
+  $('#focusBtn').addEventListener('click',function(){
+    st.focus=!st.focus;save();
+    var i=st.focus?visibleIndex():cur;sync();
+    if(st.focus)setCurrent(i,true);else if(cur>=0)setTimeout(function(){setCurrent(cur,true);},30);
+  });
+  $('#themeBtn').addEventListener('click',function(){
+    var now=root.getAttribute('data-theme');st.theme=now==='dark'?'light':'dark';save();sync();
+  });
+  $('#tocBtn').addEventListener('click',function(){toc.classList.toggle('open');});
+
+  sync();refreshDone();
+  setCurrent(0,false);
+  if(st.focus)setCurrent(visibleIndex(),false);
+})();
+</script>
+</body>
+</html>

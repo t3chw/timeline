@@ -1,0 +1,1029 @@
+<!doctype html>
+<html lang="en" data-bionic="on" data-focus="off">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>makemore part 2: the MLP (revision notes)</title>
+<script>
+(function(){var r=document.documentElement;try{var s=JSON.parse(localStorage.getItem('makemore-part2-notes-v1')||'{}');
+if(s.bionic===false)r.setAttribute('data-bionic','off');if(s.focus===true)r.setAttribute('data-focus','on');
+var t=s.theme||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');r.setAttribute('data-theme',t);}catch(e){}})();
+</script>
+<style>
+:root{
+  color-scheme:light;
+  --bg:#faf8f4;--surface:#ffffff;--surface-2:#f2efe8;--ink:#1c1a17;--ink-2:#57524a;--ink-3:#8b857a;
+  --line:#e8e3d9;--line-2:#d6d0c2;
+  --accent:#2f9e6b;--accent-ink:#1d6b47;--accent-soft:#e1f2e9;
+  --warn:#b4531f;--warn-soft:#fbebe0;--info:#2b5fa8;--info-soft:#e5eefa;
+  --code-bg:#f5f2ea;--code-ink:#2a2723;--k:#8a3ea8;--s:#2f7d4f;--n:#b4531f;--c:#8b857a;--f:#2b5fa8;
+  --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  --shadow:0 1px 2px rgba(60,40,10,.05),0 10px 28px -14px rgba(60,40,10,.18);
+}
+:root[data-theme=dark]{
+  color-scheme:dark;
+  --bg:#121110;--surface:#1b1a18;--surface-2:#252320;--ink:#f3f0ea;--ink-2:#bdb7ab;--ink-3:#847e72;
+  --line:#2c2a26;--line-2:#3b3833;
+  --accent:#46c28a;--accent-ink:#7fe0b2;--accent-soft:#15301f;
+  --warn:#f0905a;--warn-soft:#3a2418;--info:#7aa7e8;--info-soft:#18263a;
+  --code-bg:#161513;--code-ink:#e8e4dc;--k:#d29bf0;--s:#8fd6a8;--n:#f0a070;--c:#847e72;--f:#8fb8f2;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 28px -14px rgba(0,0,0,.6);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+[hidden]{display:none!important}
+
+/* ---------- top bar */
+.top{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 88%,transparent);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.top .in{max-width:76rem;margin:0 auto;padding:.55rem 1.25rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.brand{font:600 1.05rem var(--serif);letter-spacing:-.01em;margin-right:auto;white-space:nowrap}
+.brand small{display:block;font:500 .72rem var(--sans);color:var(--ink-3);letter-spacing:0}
+.tool{display:inline-flex;align-items:center;gap:.45rem;padding:.38rem .5rem .38rem .8rem;font:500 .82rem var(--sans);
+  color:var(--ink-2);background:var(--surface);border:1px solid var(--line-2);border-radius:99px;cursor:pointer}
+.tool:hover{color:var(--ink);border-color:var(--ink-3)}
+.tool .st{font-size:.66rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:.08rem .45rem;border-radius:99px;background:var(--surface-2);color:var(--ink-3)}
+.tool[aria-pressed=true]{color:var(--accent-ink);background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 55%,var(--line-2))}
+.tool[aria-pressed=true] .st{background:var(--accent-ink);color:var(--bg)}
+.tool.plain{padding:.38rem .8rem}
+#tocBtn{display:none}
+.prog{font:600 .78rem var(--sans);color:var(--ink-2);padding:.3rem .7rem;border-radius:99px;background:var(--surface-2);font-variant-numeric:tabular-nums}
+.pbar{height:3px;background:var(--surface-2)}
+.pbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+
+/* ---------- layout */
+.shell{max-width:76rem;margin:0 auto;padding:0 1.25rem 6rem;display:grid;grid-template-columns:17.5rem minmax(0,1fr);gap:2.5rem}
+#toc{position:sticky;top:4.6rem;align-self:start;max-height:calc(100vh - 5.4rem);overflow:auto;padding:1.4rem 0 1rem;font-size:.84rem}
+#toc h3{font:700 .68rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:1.1rem 0 .4rem}
+#toc h3:first-child{margin-top:0}
+#toc a{display:flex;gap:.5rem;align-items:baseline;padding:.28rem .6rem;border-radius:8px;text-decoration:none;color:var(--ink-2);line-height:1.35}
+#toc a:hover{background:var(--surface-2);color:var(--ink)}
+#toc a.active{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+#toc a .n{flex:none;width:1.6rem;color:var(--ink-3);font-variant-numeric:tabular-nums;font-size:.76rem}
+#toc a.done .n::after{content:"✓";color:var(--accent)}
+#toc a.done .n{font-size:0}
+#toc a.done .n::after{font-size:.9rem}
+main{min-width:0}
+
+/* ---------- intro + part banners */
+.intro{margin-top:2.2rem;padding:1.8rem 1.8rem 1.5rem;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.kicker{font:700 .72rem var(--sans);letter-spacing:.16em;text-transform:uppercase;color:var(--accent-ink)}
+.intro h1{font:600 clamp(2rem,5vw,3rem)/1.05 var(--serif);letter-spacing:-.03em;margin:.5rem 0 .8rem}
+.intro p{color:var(--ink-2);max-width:42rem;margin:.4rem 0}
+.how{display:grid;grid-template-columns:repeat(auto-fit,minmax(13rem,1fr));gap:.7rem;margin-top:1.2rem}
+.how div{padding:.75rem .9rem;border-radius:12px;background:var(--surface-2);font-size:.88rem;color:var(--ink-2)}
+.how div>b:not(.bn){display:block;color:var(--ink);margin-bottom:.15rem}
+.part{margin:4.2rem 0 0;padding:1.4rem 1.6rem;border-radius:16px;background:linear-gradient(135deg,var(--accent-soft),var(--surface));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line))}
+.part h2{font:600 1.7rem/1.15 var(--serif);letter-spacing:-.02em;margin:.3rem 0 .4rem}
+.part p{margin:.2rem 0;color:var(--ink-2);max-width:40rem}
+
+/* ---------- concept cards */
+.concept{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:1.4rem 1.6rem 1.2rem;
+  margin-top:2rem;box-shadow:var(--shadow);scroll-margin-top:5.2rem}
+.concept + .concept{margin-top:3.6rem}
+.concept + .concept::before{content:"";position:absolute;left:0;right:0;top:-1.8rem;height:2px;opacity:.6;
+  background:repeating-linear-gradient(90deg,var(--ink-3) 0 8px,transparent 8px 16px)}
+.concept + .concept::after{content:"✓  concept done";position:absolute;left:50%;top:-1.8rem;transform:translate(-50%,-50%);padding:0 .9rem;
+  background:var(--bg);font:600 .68rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);white-space:nowrap}
+.concept.done{border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.chead{display:flex;align-items:flex-start;gap:.85rem;margin-bottom:.8rem}
+.num{flex:none;min-width:2.2rem;height:2.2rem;padding:0 .3rem;border-radius:99px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font:700 .82rem var(--sans);font-variant-numeric:tabular-nums}
+.chead h2{font:600 1.45rem/1.2 var(--serif);letter-spacing:-.015em;margin:.12rem 0 0}
+.time{margin-left:auto;flex:none;font:600 .74rem var(--mono);text-decoration:none;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--line);padding:.22rem .55rem;border-radius:99px;white-space:nowrap}
+.time:hover{color:var(--accent-ink);border-color:var(--accent)}
+.body p{margin:.7rem 0}
+.body ul,.body ol{padding-left:1.25rem;margin:.7rem 0}
+.body li{margin:.3rem 0}
+.body .lead{font-size:1.08rem;color:var(--ink)}
+.oneline{margin-top:1.2rem;padding:.7rem .95rem;border-radius:12px;background:var(--accent-soft);border-left:4px solid var(--accent);font-weight:600}
+.oneline small{display:block;font:700 .66rem var(--sans);letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:.1rem}
+.cfoot{display:flex;justify-content:flex-end;margin-top:1rem}
+.done-btn{font:600 .84rem var(--sans);padding:.45rem .95rem;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);cursor:pointer}
+.done-btn:hover{border-color:var(--ink-3);color:var(--ink)}
+.concept.done .done-btn{background:var(--accent-ink);color:var(--bg);border-color:var(--accent-ink)}
+
+/* bionic */
+.bn{font-weight:inherit}
+html[data-bionic=on] .bn{font-weight:700}
+
+/* pieces */
+.code{background:var(--code-bg);border:1px solid var(--line);border-radius:12px;padding:.9rem 1rem;overflow:auto;font:.83rem/1.65 var(--mono);color:var(--code-ink);margin:1rem 0;tab-size:4}
+.code code{font:inherit}
+.tk-k{color:var(--k)}.tk-s{color:var(--s)}.tk-n{color:var(--n)}.tk-c{color:var(--c);font-style:italic}.tk-f{color:var(--f)}
+.shape{font:.8rem var(--mono);background:var(--info-soft);color:var(--info);padding:.05rem .4rem;border-radius:6px;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:.45rem;margin:.9rem 0}
+.chip{font:600 .84rem var(--mono);padding:.28rem .62rem;border-radius:8px;background:var(--surface-2);border:1px solid var(--line)}
+.callout{margin:1rem 0;padding:.75rem .95rem;border-radius:12px;border-left:4px solid var(--accent);background:var(--accent-soft)}
+.callout .ctitle{display:block;font:700 .68rem var(--sans);letter-spacing:.14em;text-transform:uppercase;margin-bottom:.15rem;color:var(--accent-ink)}
+.callout.gotcha{border-color:var(--warn);background:var(--warn-soft)}.callout.gotcha .ctitle{color:var(--warn)}
+.callout.why{border-color:var(--info);background:var(--info-soft)}.callout.why .ctitle{color:var(--info)}
+.callout>div{font-size:.96rem}
+.callout p{margin:.35rem 0}
+table.t{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.9rem;display:block;overflow-x:auto}
+table.t th,table.t td{padding:.5rem .8rem;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+table.t th{background:var(--surface-2);font-weight:650;border-bottom-color:var(--line-2)}
+table.t td.m,table.t td code,.mono{font-family:var(--mono);font-size:.84rem}
+table.t tr.hl td{background:var(--accent-soft)}
+.formula{margin:1rem 0;padding:.9rem 1rem;border-radius:12px;background:var(--surface-2);text-align:center;font:1.12rem var(--serif);overflow-x:auto}
+.frac{display:inline-flex;flex-direction:column;align-items:center;vertical-align:middle;margin:0 .25em;font-size:.95em}
+.frac>span:first-child{border-bottom:1.5px solid currentColor;padding:0 .35em .1em}
+.frac>span:last-child{padding:.1em .35em 0}
+.formula i{font-family:var(--serif)}
+.fig{margin:1.2rem 0}
+.fig figcaption{font-size:.84rem;color:var(--ink-3);margin-top:.4rem;text-align:center}
+.d{width:100%;height:auto;display:block}
+.hint{color:var(--ink-3);font-size:.9rem}
+details.q{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:0 1rem;margin:.55rem 0}
+details.q[open]{border-color:var(--line-2);padding-bottom:.9rem}
+details.q summary{cursor:pointer;list-style:none;display:flex;gap:.7rem;align-items:flex-start;padding:.8rem 0;font-weight:600}
+details.q summary::-webkit-details-marker{display:none}
+details.q summary::before{content:"?";flex:none;display:grid;place-items:center;width:1.4rem;height:1.4rem;margin-top:.15rem;border-radius:50%;font:700 .78rem var(--sans);color:var(--accent-ink);background:var(--accent-soft)}
+details.q[open] summary::before{content:"✓"}
+details.q .ans{margin-left:2.1rem;color:var(--ink-2)}
+details.q .ans p{margin:.4rem 0}
+
+/* svg */
+.d .box{fill:var(--surface);stroke:var(--line-2);stroke-width:1.5}
+.d .box.acc{fill:var(--accent-soft);stroke:var(--accent)}
+.d .box.info{fill:var(--info-soft);stroke:var(--info)}
+.d .box.warn{fill:var(--warn-soft);stroke:var(--warn)}
+.d .cell{fill:var(--surface);stroke:var(--line-2);stroke-width:1.2}
+.d .cell.hl{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.8}
+.d .cell.sum{fill:var(--info-soft);stroke:var(--info)}
+.d .t{fill:var(--ink);font:600 13px var(--sans)}
+.d .tm{fill:var(--ink-2);font:12.5px var(--sans)}
+.d .ts{fill:var(--ink-3);font:11.5px var(--sans)}
+.d .tmono{fill:var(--ink);font:12.5px var(--mono)}
+.d .lane{fill:var(--ink-3);font:700 11px var(--sans);letter-spacing:.14em}
+.d .big{fill:var(--ink-2);font:600 26px var(--sans)}
+.d .ln{stroke:var(--ink-3);stroke-width:1.7;fill:none}
+.d .ln.acc{stroke:var(--accent)}.d .ln.warn{stroke:var(--warn)}
+.d .dash{stroke:var(--ink-3);stroke-width:1.5;stroke-dasharray:5 5}
+.d .axis{stroke:var(--ink-3);stroke-width:1.3}
+.d .grid{stroke:var(--line);stroke-width:1}
+.d .curve{fill:none;stroke:var(--accent);stroke-width:2.6}
+.d .pt{fill:var(--ink);stroke:var(--bg);stroke-width:2}.d .pt.acc{fill:var(--accent)}.d .pt.warn{fill:var(--warn)}
+.d .bar{fill:var(--line-2)}.d .bar.hot{fill:var(--accent)}
+.d .node{fill:var(--surface);stroke:var(--line-2);stroke-width:2}.d .node.acc{fill:var(--accent-soft);stroke:var(--accent)}
+.d .ball{fill:var(--info-soft);stroke:var(--info);stroke-width:2}
+#arr path{fill:var(--ink-3)}
+
+/* focus mode */
+html[data-focus=on] .concept:not(.current),html[data-focus=on] .part,html[data-focus=on] .intro{display:none}
+html[data-focus=on] .concept{margin-top:1.6rem}
+html[data-focus=on] .concept::before,html[data-focus=on] .concept::after{display:none}
+html[data-focus=on] .body{font-size:1.1rem;line-height:1.8}
+html[data-focus=on] .concept.current{animation:in .3s ease}
+@keyframes in{from{opacity:0;transform:translateY(8px)}}
+.fnav{display:none;position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);width:min(44rem,calc(100% - 1.5rem));z-index:60;
+  padding:.7rem .85rem .8rem;background:color-mix(in srgb,var(--surface) 94%,transparent);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+  border:1px solid var(--line-2);border-radius:16px;box-shadow:0 12px 36px -12px rgba(0,0,0,.35)}
+html[data-focus=on] .fnav{display:block}
+.fbar{height:4px;border-radius:4px;background:var(--surface-2);overflow:hidden;margin-bottom:.65rem}
+.fbar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.frow{display:flex;align-items:center;gap:.7rem}
+.flab{flex:1;min-width:0;text-align:center;font-size:.84rem;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btn{font:600 .86rem var(--sans);padding:.5rem 1rem;border-radius:99px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);cursor:pointer}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:disabled{opacity:.4;cursor:default}
+html[data-focus=on] main{padding-bottom:6rem}
+
+/* responsive */
+@media (max-width:40rem){
+  .top{position:static}
+  .brand{display:none}
+  .top .in{padding:.6rem 1rem}
+  .concept{scroll-margin-top:1rem}
+  .fig{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .fig .d{min-width:600px}
+  .fig figcaption{position:sticky;left:0;width:calc(100vw - 4rem)}
+}
+@media (max-width:62rem){
+  .shell{display:block}
+  #tocBtn{display:inline-flex}
+  #toc{display:none;position:fixed;z-index:70;left:0;right:0;top:0;bottom:0;max-height:none;background:var(--bg);padding:4.2rem 1.25rem 2rem}
+  #toc.open{display:block}
+  .time{margin-left:0}
+  .chead{flex-wrap:wrap}
+  .concept{padding:1.1rem 1.1rem 1rem}
+  .brand small{display:none}
+}
+@media print{
+  .top,#toc,.fnav,.cfoot{display:none!important}
+  .shell{display:block}
+  .concept{box-shadow:none;break-inside:avoid-page}
+  html[data-focus=on] .concept:not(.current),html[data-focus=on] .part{display:block!important}
+  details.q{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z"/></marker>
+</defs></svg>
+<header class="top"><div class="in">
+<button class="tool plain" id="tocBtn" type="button" aria-label="Contents">☰ Contents</button>
+<div class="brand">makemore · part 2<small>the MLP (Bengio 2003)</small></div>
+<span class="prog" id="progText">0 / 50 got it</span>
+<button class="tool" id="bionicBtn" type="button" aria-pressed="true"><span>Bionic reading</span><span class="st">On</span></button>
+<button class="tool" id="focusBtn" type="button" aria-pressed="false"><span>Focus mode</span><span class="st">Off</span></button>
+<button class="tool plain" id="themeBtn" type="button" aria-label="Toggle theme">◐ Theme</button>
+</div><div class="pbar"><i id="progBar"></i></div></header>
+<div class="shell">
+<nav id="toc" aria-label="Contents"></nav>
+<main>
+
+<section class="intro">
+<div class="kicker">Revision notes · Machine Learning</div>
+<h1>makemore, part 2: the MLP</h1>
+<p>Notes from Andrej Karpathy's lecture <b>“Building makemore Part 2: MLP”</b> (1 h 16 min). They follow the order he teaches in, in my own words, with diagrams. Every <span class="mono">▶ time</span> chip opens the video at that moment. Where I add something of my own, it says “my note”.</p>
+<div class="how">
+<div><b>Bionic reading</b>The start of each word is bold to guide your eyes. Toggle it at the top.</div>
+<div><b>Focus mode</b>Shows one concept at a time. Use ← and → or the buttons.</div>
+<div><b>Got it</b>Tick each concept when you can explain it. Progress is saved in this browser.</div>
+<div><b>In one line</b>Every card ends with a single sentence to recall. Start there when revising.</div>
+</div>
+<p style="margin-top:1rem"><button class="tool plain" id="resetBtn" type="button">Reset my ticks</button></p>
+</section>
+<section class="part" id="p0" data-short="The idea &amp; the paper"><div class="kicker">Part 0 · 0:00 – 9:00</div><h2>The problem, and the paper we copy</h2><p>Why counting stops working, and the 2003 paper whose design we are about to build.</p></section><section class="concept" id="c1" data-title="Why a bigram is not enough" data-num="1" data-track><header class="chead"><span class="num">1</span><h2>Why a bigram is not enough</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=0s" target="_blank" rel="noopener" title="Open the video at 0:00">&#9654; 0:00</a></header><div class="body">
+<p class="lead">Last video the model looked at <b>one</b> previous letter. Its names did not sound much like names.</p>
+<ul>
+<li>That model was a <b>table of counts</b>: one row for each possible previous letter.</li>
+<li>To use more context, the table needs one row for <b>every possible context</b>.</li>
+</ul>
+<figure class="fig"><svg class="d" viewBox="0 0 760 290" role="img" aria-label="Table size explodes with context length"><text class="t" x="10" y="22" text-anchor="start">How many rows would a counting table need?  (bar length is on a log scale)</text><text class="tm" x="10" y="69" text-anchor="start">1 letter of context</text><rect class="bar" x="200" y="52" width="110" height="26" rx="5"/><text class="t" x="320" y="70" text-anchor="start">27 rows</text><text class="ts" x="200" y="98" text-anchor="start">≈ 8,450 examples per row on average  (my arithmetic: 228,146 examples ÷ rows)</text><text class="tm" x="10" y="147" text-anchor="start">2 letters of context</text><rect class="bar" x="200" y="130" width="220" height="26" rx="5"/><text class="t" x="430" y="148" text-anchor="start">729 rows</text><text class="ts" x="200" y="176" text-anchor="start">≈ 313 examples per row on average  (my arithmetic: 228,146 examples ÷ rows)</text><text class="tm" x="10" y="225" text-anchor="start">3 letters of context</text><rect class="bar hot" x="200" y="208" width="330" height="26" rx="5"/><text class="t" x="540" y="226" text-anchor="start">19,683 rows</text><text class="ts" x="200" y="254" text-anchor="start">≈ 12 examples per row on average  (my arithmetic: 228,146 examples ÷ rows)</text></svg><figcaption>27, then 27×27 = 729, then 27×27×27 = 19,683 rows. He says about 20,000 for three letters.</figcaption></figure>
+<ul>
+<li>2 letters of context: 27 × 27 = <b>729 rows</b>. 3 letters: about <b>20,000 rows</b>.</li>
+<li>Most rows would get very few counts. In his words, the whole thing "explodes and doesn't work very well".</li>
+</ul>
+<div class="callout why"><b class="ctitle">So what now?</b><div>Today we use a <b>multi-layer perceptron (MLP)</b>, a small neural network, to predict the next character.</div></div>
+<div class="oneline"><small>In one line</small>More context makes a counting table explode, so we switch to a neural network.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c2" data-title="The plan: copy Bengio et al. 2003" data-num="2" data-track><header class="chead"><span class="num">2</span><h2>The plan: copy Bengio et al. 2003</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=120s" target="_blank" rel="noopener" title="Open the video at 2:00">&#9654; 2:00</a></header><div class="body">
+<p class="lead">We follow one paper: <b>“A Neural Probabilistic Language Model”</b> by Bengio, Ducharme, Vincent and Jauvin (2003).</p>
+<ul>
+<li>It is <b>not the first</b> paper to predict the next word with a neural net, but it was very influential and is nicely written.</li>
+<li>The paper has <b>19 pages</b>. He invites you to read it; it is "very readable".</li>
+<li>The paper works on <b>words</b> (a vocabulary of 17,000). We work on <b>characters</b> (27). The modelling idea is the same.</li>
+<li>Same recipe as before: the net outputs a probability for every next token, and we <b>maximise the likelihood of the training data</b>.</li>
+</ul>
+<div class="oneline"><small>In one line</small>We copy the paper's design, with 27 characters instead of 17,000 words.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c3" data-title="Embeddings: every token becomes a point" data-num="3" data-track><header class="chead"><span class="num">3</span><h2>Embeddings: every token becomes a point</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=181s" target="_blank" rel="noopener" title="Open the video at 3:01">&#9654; 3:01</a></header><div class="body">
+<p class="lead">The paper gives each of its 17,000 words a list of numbers, say <b>30</b>. This list is called an <b>embedding</b> (a feature vector).</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 285" role="img" aria-label="Words as points in a space"><rect class="box" x="20" y="20" width="440" height="250" rx="14"/><line class="dash" x1="120" y1="80" x2="168" y2="104"/><line class="dash" x1="330" y1="70" x2="372" y2="104"/><line class="dash" x1="112" y1="196" x2="176" y2="224"/><line class="dash" x1="336" y1="190" x2="380" y2="226"/><circle class="pt acc" cx="120" cy="80" r="6"/><text class="tmono" x="120" y="68" text-anchor="middle">a</text><circle class="pt acc" cx="168" cy="104" r="6"/><text class="tmono" x="168" y="92" text-anchor="middle">the</text><circle class="pt acc" cx="330" cy="70" r="6"/><text class="tmono" x="330" y="58" text-anchor="middle">dog</text><circle class="pt acc" cx="372" cy="104" r="6"/><text class="tmono" x="372" y="92" text-anchor="middle">cat</text><circle class="pt acc" cx="112" cy="196" r="6"/><text class="tmono" x="112" y="184" text-anchor="middle">walking</text><circle class="pt acc" cx="176" cy="224" r="6"/><text class="tmono" x="176" y="212" text-anchor="middle">running</text><circle class="pt acc" cx="336" cy="190" r="6"/><text class="tmono" x="336" y="178" text-anchor="middle">room</text><circle class="pt acc" cx="380" cy="226" r="6"/><text class="tmono" x="380" y="214" text-anchor="middle">bedroom</text><text class="ts" x="240" y="262" text-anchor="middle">a 30-dimensional space, squashed to 2D to draw it</text><text class="tm" x="490" y="60" text-anchor="start">At the start every word sits at a</text><text class="t" x="490" y="78" text-anchor="start">RANDOM spot.</text><text class="tm" x="490" y="112" text-anchor="start">Backpropagation slowly moves the</text><text class="tm" x="490" y="130" text-anchor="start">points. Words used in similar ways</text><text class="tm" x="490" y="148" text-anchor="start">drift together:</text><text class="tmono" x="500" y="178" text-anchor="start">a  ≈  the</text><text class="tmono" x="500" y="198" text-anchor="start">cat  ≈  dog</text><text class="tmono" x="500" y="218" text-anchor="start">walking  ≈  running</text></svg><figcaption>Schematic, not a real plot. The paper embeds each of 17,000 words as a point in a space of about 30 dimensions.</figcaption></figure>
+<ul>
+<li>So there are 17,000 points in a 30-dimensional space. "That's a lot of points for a very small space."</li>
+<li>At the start the points are placed <b>at random</b>.</li>
+<li>During training, <b>backpropagation moves them</b>. Words with similar meanings drift to nearby places; unrelated words end up elsewhere.</li>
+</ul>
+<div class="oneline"><small>In one line</small>An embedding is a learnable list of numbers per token; training moves similar tokens close together.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c4" data-title="Why embeddings help you generalise" data-num="4" data-track><header class="chead"><span class="num">4</span><h2>Why embeddings help you generalise</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=241s" target="_blank" rel="noopener" title="Open the video at 4:01">&#9654; 4:01</a></header><div class="body">
+<p class="lead">Say the model must finish “A dog was running in a ___”, but that exact phrase <b>never appeared</b> in the training data.</p>
+<ul>
+<li>With plain counts you have no clue what comes next. He calls this being <b>out of distribution</b>.</li>
+<li>With embeddings you can still do well. Maybe the training data had <b>“The dog was running in a room”</b>.</li>
+<li>If the net learned that <b>a</b> and <b>the</b> are interchangeable, it can put their embeddings <b>close together</b>. Then what it knows about one carries over to the other.</li>
+<li>Same for cats and dogs (both animals, similar contexts) and for walking and running.</li>
+</ul>
+<div class="chips "><span class="chip">The cat is walking in the bedroom</span><span class="chip">A dog was running in a room</span><span class="chip">The cat is running in a room</span><span class="chip">A dog is walking in a bedroom</span><span class="chip">The dog was walking in the room</span></div>
+<p class="hint">The sentences are the paper's own examples. Knowledge is "transferred through the embedding space".</p>
+<div class="oneline"><small>In one line</small>Similar tokens get similar embeddings, so knowledge about one sentence carries over to similar ones.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c5" data-title="The network in the paper" data-num="5" data-track><header class="chead"><span class="num">5</span><h2>The network in the paper</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=350s" target="_blank" rel="noopener" title="Open the video at 5:50">&#9654; 5:50</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 760 334" role="img" aria-label="The Bengio 2003 architecture"><text class="lane" x="10" y="20" text-anchor="start">The network from the paper (3 previous words in, next word out)</text><rect class="box" x="10" y="40" width="100" height="48" rx="10"/><text class="t" x="60.0" y="60.5" text-anchor="middle">word t-3</text><text class="tm" x="60.0" y="76.5" text-anchor="middle">an index</text><line class="ln" x1="110" y1="64" x2="162" y2="64" marker-end="url(#arr)"/><rect class="box acc" x="162" y="40" width="120" height="48" rx="10"/><text class="t" x="222.0" y="60.5" text-anchor="middle">row of C</text><text class="tm" x="222.0" y="76.5" text-anchor="middle">30 numbers</text><line class="ln" x1="282" y1="64" x2="350" y2="116" marker-end="url(#arr)"/><rect class="box" x="10" y="112" width="100" height="48" rx="10"/><text class="t" x="60.0" y="132.5" text-anchor="middle">word t-2</text><text class="tm" x="60.0" y="148.5" text-anchor="middle">an index</text><line class="ln" x1="110" y1="136" x2="162" y2="136" marker-end="url(#arr)"/><rect class="box acc" x="162" y="112" width="120" height="48" rx="10"/><text class="t" x="222.0" y="132.5" text-anchor="middle">row of C</text><text class="tm" x="222.0" y="148.5" text-anchor="middle">30 numbers</text><line class="ln" x1="282" y1="136" x2="350" y2="116" marker-end="url(#arr)"/><rect class="box" x="10" y="184" width="100" height="48" rx="10"/><text class="t" x="60.0" y="204.5" text-anchor="middle">word t-1</text><text class="tm" x="60.0" y="220.5" text-anchor="middle">an index</text><line class="ln" x1="110" y1="208" x2="162" y2="208" marker-end="url(#arr)"/><rect class="box acc" x="162" y="184" width="120" height="48" rx="10"/><text class="t" x="222.0" y="204.5" text-anchor="middle">row of C</text><text class="tm" x="222.0" y="220.5" text-anchor="middle">30 numbers</text><line class="ln" x1="282" y1="208" x2="350" y2="116" marker-end="url(#arr)"/><rect class="box" x="350" y="72" width="92" height="90" rx="10"/><text class="t" x="396.0" y="105.5" text-anchor="middle">glue</text><text class="tm" x="396.0" y="121.5" text-anchor="middle">side by side</text><text class="tm" x="396.0" y="137.5" text-anchor="middle">3 × 30 = 90</text><line class="ln" x1="442" y1="117" x2="482" y2="117" marker-end="url(#arr)"/><rect class="box info" x="482" y="62" width="110" height="110" rx="10"/><text class="t" x="537.0" y="97.5" text-anchor="middle">hidden layer</text><text class="tm" x="537.0" y="113.5" text-anchor="middle">tanh</text><text class="tm" x="537.0" y="129.5" text-anchor="middle">e.g. 100</text><text class="tm" x="537.0" y="145.5" text-anchor="middle">neurons</text><line class="ln" x1="592" y1="117" x2="624" y2="117" marker-end="url(#arr)"/><rect class="box warn" x="624" y="62" width="126" height="110" rx="10"/><text class="t" x="687.0" y="97.5" text-anchor="middle">output layer</text><text class="tm" x="687.0" y="113.5" text-anchor="middle">17,000 logits</text><text class="tm" x="687.0" y="129.5" text-anchor="middle">then softmax</text><text class="tm" x="687.0" y="145.5" text-anchor="middle">most work here</text><rect class="box" x="162" y="240" width="120" height="30" rx="8"/><text class="ts" x="222" y="260" text-anchor="middle">same matrix C for all 3</text><text class="tm" x="10" y="300" text-anchor="start">Trained by backpropagation:  C,  hidden weights + bias,  output weights + bias.</text><text class="tm" x="10" y="320" text-anchor="start">Goal: make the true next word's probability as large as possible (maximise log-likelihood).</text></svg><figcaption>He ignores the dashed arrows in the paper's figure (a variation he does not cover).</figcaption></figure>
+<ol>
+<li>Each of the <b>3 previous words</b> is an index (a number from 0 to 16,999).</li>
+<li>Each index <b>picks a row</b> of the matrix <b>C</b> (17,000 × 30). That row is the word's 30 numbers. All three positions <b>share the same C</b>.</li>
+<li>The three rows go side by side: <b>90 numbers</b> in total.</li>
+<li><b>Hidden layer</b>: fully connected to those 90 numbers, then <b>tanh</b>. Its size is a <b>hyperparameter</b>, for example 100.</li>
+<li><b>Output layer</b>: one neuron per possible next word (17,000), fully connected to the hidden layer. It is "the expensive layer".</li>
+<li><b>Softmax</b> turns the 17,000 scores into probabilities. We push up the probability of the word that really came next.</li>
+</ol>
+<div class="callout remember"><b class="ctitle">Hyperparameter</b><div>A design choice that is up to you (like the hidden layer size). The network does <b>not</b> learn it.</div></div>
+<p>Learned by backpropagation: <b>C</b>, the hidden weights and biases, and the output weights and biases.</p>
+<div class="oneline"><small>In one line</small>Embedding lookup, glue, tanh hidden layer, big output layer, softmax: everything is learned together.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="t1" data-title="Test 1: the idea" data-num="T1" data-track><header class="chead"><span class="num">T1</span><h2>Test 1: the idea</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=540s" target="_blank" rel="noopener" title="Open the video at 9:00">&#9654; 9:00</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>Why can't we just count with 3 letters of context?</span></summary><div class="ans">The table needs a row for every context: 27 × 27 × 27 = 19,683 rows (he says about 20,000). Each row would get very few counts.</div></details><details class="q"><summary><span>What is an embedding, and where do its numbers come from?</span></summary><div class="ans">A list of numbers for each token. They start <b>random</b> and are tuned by <b>backpropagation</b> during training.</div></details><details class="q"><summary><span>How does an embedding help with a sentence never seen in training?</span></summary><div class="ans">Similar words get nearby embeddings, so what was learned about “the dog was running in a room” transfers to “a dog was running in a ___”.</div></details><details class="q"><summary><span>Walk through the paper's network from input to output.</span></summary><div class="ans">Indices → look up rows of C (shared) → glue to 90 numbers → hidden layer with tanh → output layer with one neuron per word → softmax.</div></details><details class="q"><summary><span>What is a hyperparameter? Give an example.</span></summary><div class="ans">A design choice made by you, not learned by the network, such as the size of the hidden layer.</div></details><details class="q"><summary><span>Which layer does most of the work in the paper, and why?</span></summary><div class="ans">The output layer: it has one neuron for each of the 17,000 words, all fully connected to the hidden layer.</div></details><div class="oneline"><small>In one line</small>If you can answer these, you know the idea.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p1" data-short="Part 1 · The forward pass"><div class="kicker">Part 1 · 9:00 – 38:00</div><h2>Build the network, piece by piece</h2><p>Make the data, the embedding table, the hidden layer and the loss. Fix the shapes as they break.</p></section><section class="concept" id="c6" data-title="Load the names and the vocabulary" data-num="6" data-track><header class="chead"><span class="num">6</span><h2>Load the names and the vocabulary</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=541s" target="_blank" rel="noopener" title="Open the video at 9:01">&#9654; 9:01</a></header><div class="body">
+<p>A brand new notebook, with the same names file as last time.</p>
+<pre class="code" data-lang="python"><code>import torch
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+words = open('names.txt', 'r').read().splitlines()
+len(words)                                    # 32033
+
+chars = sorted(list(set(''.join(words))))
+stoi = {s: i+1 for i, s in enumerate(chars)}
+stoi['.'] = 0
+itos = {i: s for s, i in stoi.items()}        # 0 -&gt; '.', 1 -&gt; 'a', ... 26 -&gt; 'z'</code></pre>
+<p>The special token <code>.</code> is index <b>0</b>. It marks both the start and the end of a name.</p>
+<div class="oneline"><small>In one line</small>Same vocabulary as last video: 26 letters plus '.' at index 0 makes 27 tokens.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c7" data-title="Build the dataset with a rolling window" data-num="7" data-track><header class="chead"><span class="num">7</span><h2>Build the dataset with a rolling window</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=580s" target="_blank" rel="noopener" title="Open the video at 9:40">&#9654; 9:40</a></header><div class="body">
+<p class="lead"><b>block_size</b> is the context length: how many characters we use to predict the next one. Here it is <b>3</b>, as in the paper.</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 296" role="img" aria-label="Rolling context window for emma"><text class="t" x="100.0" y="36" text-anchor="middle">what we see</text><text class="t" x="440.0" y="36" text-anchor="middle">what the computer stores</text><text class="ts" x="100.0" y="52" text-anchor="middle">context (X)</text><text class="ts" x="234.0" y="52" text-anchor="middle">label (Y)</text><text class="ts" x="440.0" y="52" text-anchor="middle">X  (integers)</text><text class="ts" x="574.0" y="52" text-anchor="middle">Y</text><rect class="cell" x="40" y="62" width="40" height="34"/><text class="tmono" x="60.0" y="83.5" text-anchor="middle">.</text><rect class="cell" x="80" y="62" width="40" height="34"/><text class="tmono" x="100.0" y="83.5" text-anchor="middle">.</text><rect class="cell" x="120" y="62" width="40" height="34"/><text class="tmono" x="140.0" y="83.5" text-anchor="middle">.</text><rect class="cell" x="40" y="96" width="40" height="34"/><text class="tmono" x="60.0" y="117.5" text-anchor="middle">.</text><rect class="cell" x="80" y="96" width="40" height="34"/><text class="tmono" x="100.0" y="117.5" text-anchor="middle">.</text><rect class="cell" x="120" y="96" width="40" height="34"/><text class="tmono" x="140.0" y="117.5" text-anchor="middle">e</text><rect class="cell" x="40" y="130" width="40" height="34"/><text class="tmono" x="60.0" y="151.5" text-anchor="middle">.</text><rect class="cell" x="80" y="130" width="40" height="34"/><text class="tmono" x="100.0" y="151.5" text-anchor="middle">e</text><rect class="cell" x="120" y="130" width="40" height="34"/><text class="tmono" x="140.0" y="151.5" text-anchor="middle">m</text><rect class="cell" x="40" y="164" width="40" height="34"/><text class="tmono" x="60.0" y="185.5" text-anchor="middle">e</text><rect class="cell" x="80" y="164" width="40" height="34"/><text class="tmono" x="100.0" y="185.5" text-anchor="middle">m</text><rect class="cell" x="120" y="164" width="40" height="34"/><text class="tmono" x="140.0" y="185.5" text-anchor="middle">m</text><rect class="cell" x="40" y="198" width="40" height="34"/><text class="tmono" x="60.0" y="219.5" text-anchor="middle">m</text><rect class="cell" x="80" y="198" width="40" height="34"/><text class="tmono" x="100.0" y="219.5" text-anchor="middle">m</text><rect class="cell" x="120" y="198" width="40" height="34"/><text class="tmono" x="140.0" y="219.5" text-anchor="middle">a</text><rect class="cell hl" x="214" y="62" width="40" height="34"/><text class="tmono" x="234.0" y="83.5" text-anchor="middle">e</text><rect class="cell hl" x="214" y="96" width="40" height="34"/><text class="tmono" x="234.0" y="117.5" text-anchor="middle">m</text><rect class="cell hl" x="214" y="130" width="40" height="34"/><text class="tmono" x="234.0" y="151.5" text-anchor="middle">m</text><rect class="cell hl" x="214" y="164" width="40" height="34"/><text class="tmono" x="234.0" y="185.5" text-anchor="middle">a</text><rect class="cell hl" x="214" y="198" width="40" height="34"/><text class="tmono" x="234.0" y="219.5" text-anchor="middle">.</text><rect class="cell" x="380" y="62" width="40" height="34"/><text class="tmono" x="400.0" y="83.5" text-anchor="middle">0</text><rect class="cell" x="420" y="62" width="40" height="34"/><text class="tmono" x="440.0" y="83.5" text-anchor="middle">0</text><rect class="cell" x="460" y="62" width="40" height="34"/><text class="tmono" x="480.0" y="83.5" text-anchor="middle">0</text><rect class="cell" x="380" y="96" width="40" height="34"/><text class="tmono" x="400.0" y="117.5" text-anchor="middle">0</text><rect class="cell" x="420" y="96" width="40" height="34"/><text class="tmono" x="440.0" y="117.5" text-anchor="middle">0</text><rect class="cell" x="460" y="96" width="40" height="34"/><text class="tmono" x="480.0" y="117.5" text-anchor="middle">5</text><rect class="cell" x="380" y="130" width="40" height="34"/><text class="tmono" x="400.0" y="151.5" text-anchor="middle">0</text><rect class="cell" x="420" y="130" width="40" height="34"/><text class="tmono" x="440.0" y="151.5" text-anchor="middle">5</text><rect class="cell" x="460" y="130" width="40" height="34"/><text class="tmono" x="480.0" y="151.5" text-anchor="middle">13</text><rect class="cell" x="380" y="164" width="40" height="34"/><text class="tmono" x="400.0" y="185.5" text-anchor="middle">5</text><rect class="cell" x="420" y="164" width="40" height="34"/><text class="tmono" x="440.0" y="185.5" text-anchor="middle">13</text><rect class="cell" x="460" y="164" width="40" height="34"/><text class="tmono" x="480.0" y="185.5" text-anchor="middle">13</text><rect class="cell" x="380" y="198" width="40" height="34"/><text class="tmono" x="400.0" y="219.5" text-anchor="middle">13</text><rect class="cell" x="420" y="198" width="40" height="34"/><text class="tmono" x="440.0" y="219.5" text-anchor="middle">13</text><rect class="cell" x="460" y="198" width="40" height="34"/><text class="tmono" x="480.0" y="219.5" text-anchor="middle">1</text><rect class="cell hl" x="554" y="62" width="40" height="34"/><text class="tmono" x="574.0" y="83.5" text-anchor="middle">5</text><rect class="cell hl" x="554" y="96" width="40" height="34"/><text class="tmono" x="574.0" y="117.5" text-anchor="middle">13</text><rect class="cell hl" x="554" y="130" width="40" height="34"/><text class="tmono" x="574.0" y="151.5" text-anchor="middle">13</text><rect class="cell hl" x="554" y="164" width="40" height="34"/><text class="tmono" x="574.0" y="185.5" text-anchor="middle">1</text><rect class="cell hl" x="554" y="198" width="40" height="34"/><text class="tmono" x="574.0" y="219.5" text-anchor="middle">0</text><line class="ln" x1="166" y1="79.0" x2="208" y2="79.0" marker-end="url(#arr)"/><line class="ln" x1="506" y1="79.0" x2="548" y2="79.0" marker-end="url(#arr)"/><line class="ln" x1="166" y1="113.0" x2="208" y2="113.0" marker-end="url(#arr)"/><line class="ln" x1="506" y1="113.0" x2="548" y2="113.0" marker-end="url(#arr)"/><line class="ln" x1="166" y1="147.0" x2="208" y2="147.0" marker-end="url(#arr)"/><line class="ln" x1="506" y1="147.0" x2="548" y2="147.0" marker-end="url(#arr)"/><line class="ln" x1="166" y1="181.0" x2="208" y2="181.0" marker-end="url(#arr)"/><line class="ln" x1="506" y1="181.0" x2="548" y2="181.0" marker-end="url(#arr)"/><line class="ln" x1="166" y1="215.0" x2="208" y2="215.0" marker-end="url(#arr)"/><line class="ln" x1="506" y1="215.0" x2="548" y2="215.0" marker-end="url(#arr)"/><text class="ts" x="380" y="266" text-anchor="middle"></text><text class="ts" x="370" y="258" text-anchor="middle"></text><text class="tm" x="10" y="262" text-anchor="start">The window slides one step each time: drop the oldest letter, add the newest.</text><text class="tm" x="10" y="282" text-anchor="start">'.' is index 0 and pads the start; the last row's label '.' means “the name ends here”.</text></svg><figcaption>The five training examples that the single name “emma” produces with a block size of 3.</figcaption></figure>
+<pre class="code" data-lang="python"><code>block_size = 3
+X, Y = [], []                          # inputs, and the labels for them
+for w in words[:5]:                    # only 5 names while we develop
+    context = [0] * block_size         # start with '...'
+    for ch in w + '.':
+        ix = stoi[ch]
+        X.append(context)
+        Y.append(ix)
+        context = context[1:] + [ix]   # crop the oldest, append the newest
+
+X = torch.tensor(X)                    # (32, 3)
+Y = torch.tensor(Y)                    # (32,)</code></pre>
+<ul>
+<li>Five names give <b>32 examples</b>. <code>X</code> is <span class="shape">(32, 3)</span> and <code>Y</code> is <span class="shape">(32)</span>, both integers.</li>
+<li>He briefly tries block sizes 4, 5 and 10 (10 letters to predict the 11th), then goes back to 3.</li>
+<li>Later he removes the <code>[:5]</code> so the whole dataset is used.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Every name becomes many rows of (context of 3 letters → next letter) by sliding a window.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c8" data-title="The embedding table C" data-num="8" data-track><header class="chead"><span class="num">8</span><h2>The embedding table C</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=720s" target="_blank" rel="noopener" title="Open the video at 12:00">&#9654; 12:00</a></header><div class="body">
+<p class="lead">We have 27 characters. Give each one an embedding. We start tiny, with <b>2 numbers</b> per character (the paper squeezes 17,000 words into about 30).</p>
+<pre class="code" data-lang="python"><code>C = torch.randn((27, 2))      # 27 rows (characters), 2 columns (embedding numbers)</code></pre>
+<ul>
+<li>Row <code>i</code> of <code>C</code> is the embedding of character <code>i</code>.</li>
+<li>The numbers are random for now. Training will tune them.</li>
+<li>Two dimensions is small on purpose: we can <b>draw</b> them later.</li>
+</ul>
+<div class="oneline"><small>In one line</small>C is a 27 × 2 table: row i holds the two learnable numbers for character i.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c9" data-title="Embed one letter: index or one-hot?" data-num="9" data-track><header class="chead"><span class="num">9</span><h2>Embed one letter: index or one-hot?</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=780s" target="_blank" rel="noopener" title="Open the video at 13:00">&#9654; 13:00</a></header><div class="body">
+<p>Two ways to get the embedding of the integer 5. They give the <b>same answer</b>.</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 340" role="img" aria-label="One-hot times a matrix equals a row lookup"><text class="t" x="10" y="22" text-anchor="start">one_hot(5, 27) @ C</text><rect class="cell" x="170" y="40" width="18" height="26"/><rect class="cell" x="188" y="40" width="18" height="26"/><rect class="cell" x="206" y="40" width="18" height="26"/><rect class="cell" x="224" y="40" width="18" height="26"/><rect class="cell" x="242" y="40" width="18" height="26"/><rect class="cell hl" x="260" y="40" width="18" height="26"/><rect class="cell" x="278" y="40" width="18" height="26"/><rect class="cell" x="296" y="40" width="18" height="26"/><rect class="cell" x="314" y="40" width="18" height="26"/><rect class="cell" x="332" y="40" width="18" height="26"/><rect class="cell" x="350" y="40" width="18" height="26"/><rect class="cell" x="368" y="40" width="18" height="26"/><rect class="cell" x="386" y="40" width="18" height="26"/><rect class="cell" x="404" y="40" width="18" height="26"/><rect class="cell" x="422" y="40" width="18" height="26"/><rect class="cell" x="440" y="40" width="18" height="26"/><rect class="cell" x="458" y="40" width="18" height="26"/><rect class="cell" x="476" y="40" width="18" height="26"/><rect class="cell" x="494" y="40" width="18" height="26"/><rect class="cell" x="512" y="40" width="18" height="26"/><rect class="cell" x="530" y="40" width="18" height="26"/><rect class="cell" x="548" y="40" width="18" height="26"/><rect class="cell" x="566" y="40" width="18" height="26"/><rect class="cell" x="584" y="40" width="18" height="26"/><rect class="cell" x="602" y="40" width="18" height="26"/><rect class="cell" x="620" y="40" width="18" height="26"/><rect class="cell" x="638" y="40" width="18" height="26"/><text class="tmono" x="269.0" y="58" text-anchor="middle">1</text><text class="ts" x="162" y="58" text-anchor="end">27 numbers:</text><text class="ts" x="664" y="58" text-anchor="start">all other entries 0</text><text class="t" x="270" y="102" text-anchor="end">C  (27 × 2)</text><text class="tmono" x="318" y="128" text-anchor="end">0</text><rect class="cell" x="330" y="110" width="110" height="26"/><text class="tmono" x="318" y="154" text-anchor="end">1</text><rect class="cell" x="330" y="136" width="110" height="26"/><text class="tmono" x="318" y="180" text-anchor="end">2</text><rect class="cell" x="330" y="162" width="110" height="26"/><text class="tmono" x="318" y="206" text-anchor="end">3</text><rect class="cell" x="330" y="188" width="110" height="26"/><text class="tmono" x="318" y="232" text-anchor="end">4</text><rect class="cell" x="330" y="214" width="110" height="26"/><text class="tmono" x="318" y="258" text-anchor="end">5</text><rect class="cell hl" x="330" y="240" width="110" height="26"/><text class="tmono" x="385.0" y="258" text-anchor="middle">0.1615   1.3169</text><text class="tmono" x="318" y="284" text-anchor="end">6</text><rect class="cell" x="330" y="266" width="110" height="26"/><text class="tmono" x="318" y="310" text-anchor="end">⋮</text><path class="ln acc" d="M269.0 68 L269.0 92 L294 92 L294 253 L328 253" marker-end="url(#arr)"/><text class="t" x="464" y="258" text-anchor="start">← the result is just row 5 of C</text><text class="tm" x="464" y="280" text-anchor="start">(the zeros multiply everything else away)</text><text class="tm" x="464" y="150" text-anchor="start">C[5]  gives the same two numbers,</text><text class="tm" x="464" y="168" text-anchor="start">with no multiplication at all.</text></svg><figcaption>Multiplying a one-hot vector by C picks out one row. Indexing does the same thing, much faster.</figcaption></figure>
+<pre class="code" data-lang="python"><code>C[5]                                                      # tensor([0.1615, 1.3169])
+F.one_hot(torch.tensor(5), num_classes=27).float() @ C    # same two numbers</code></pre>
+<div class="callout gotcha"><b class="ctitle">Two errors he hits on purpose</b><div><p><code>one_hot</code> needs a <b>tensor</b>, not a plain int.</p><p>It returns integers (<b>long</b>), but <code>C</code> is float, so the multiply fails: “expected scalar type Long but found Float”. Fix: <code>.float()</code>.</p></div></div>
+<ul>
+<li>So an embedding is secretly a <b>first layer</b>: no tanh, weight matrix <code>C</code>, fed with one-hot inputs.</li>
+<li>We just <b>index</b>, because it is much faster, and forget the one-hot view.</li>
+</ul>
+<div class="oneline"><small>In one line</small>C[5] equals one_hot(5) @ C, so an embedding is a first linear layer written as a lookup.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c10" data-title="Embed many letters at once" data-num="10" data-track><header class="chead"><span class="num">10</span><h2>Embed many letters at once</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=990s" target="_blank" rel="noopener" title="Open the video at 16:30">&#9654; 16:30</a></header><div class="body">
+<p>PyTorch indexing is flexible. You can index with a <b>list</b>, a <b>tensor</b>, repeated numbers, even a <b>2D tensor</b>.</p>
+<pre class="code" data-lang="python"><code>C[[5, 6, 7]]                              # rows 5, 6 and 7
+C[torch.tensor([5, 6, 7, 7, 7, 7, 7])]    # row 7 is fetched again and again
+emb = C[X]                                # X is (32, 3)
+emb.shape                                 # torch.Size([32, 3, 2])</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 760 312" role="img" aria-label="C[X] swaps every integer for an embedding"><text class="t" x="10" y="22" text-anchor="start">emb = C[X]</text><text class="ts" x="60" y="60" text-anchor="middle">one row of X</text><rect class="cell" x="10" y="70" width="50" height="36"/><text class="tmono" x="35.0" y="92.5" text-anchor="middle">5</text><rect class="cell" x="60" y="70" width="50" height="36"/><text class="tmono" x="85.0" y="92.5" text-anchor="middle">13</text><rect class="cell" x="110" y="70" width="50" height="36"/><text class="tmono" x="135.0" y="92.5" text-anchor="middle">1</text><path class="ln" d="M35 108 L35 140 L300 146" marker-end="url(#arr)"/><path class="ln" d="M85 108 L85 140 L300 198" marker-end="url(#arr)"/><path class="ln" d="M135 108 L135 140 L300 250" marker-end="url(#arr)"/><rect class="box acc" x="300" y="130" width="130" height="40" rx="10"/><text class="t" x="365.0" y="146.5" text-anchor="middle">C[5]</text><text class="tm" x="365.0" y="162.5" text-anchor="middle">0.16  1.32</text><rect class="box acc" x="300" y="182" width="130" height="40" rx="10"/><text class="t" x="365.0" y="198.5" text-anchor="middle">C[13]</text><text class="tm" x="365.0" y="214.5" text-anchor="middle">…  …</text><rect class="box acc" x="300" y="234" width="130" height="40" rx="10"/><text class="t" x="365.0" y="250.5" text-anchor="middle">C[1]</text><text class="tm" x="365.0" y="266.5" text-anchor="middle">…  …</text><line class="ln" x1="430" y1="150" x2="500" y2="190" marker-end="url(#arr)"/><line class="ln" x1="430" y1="202" x2="500" y2="202" marker-end="url(#arr)"/><line class="ln" x1="430" y1="254" x2="500" y2="214" marker-end="url(#arr)"/><rect class="box info" x="500" y="160" width="120" height="84" rx="10"/><text class="t" x="560.0" y="198.5" text-anchor="middle">3 × 2 block</text><text class="tm" x="560.0" y="214.5" text-anchor="middle">per example</text><text class="tm" x="10" y="250" text-anchor="start">X  (32, 3)  integers</text><text class="tm" x="10" y="270" text-anchor="start">emb  (32, 3, 2)  numbers</text><text class="t" x="10" y="296" text-anchor="start">Every integer is swapped for its own 2-number embedding.</text></svg><figcaption>Indexing with a whole 2D tensor of integers gives one embedding per integer.</figcaption></figure>
+<ul>
+<li>Check by hand: <code>emb[13, 2]</code> equals <code>C[X[13, 2]]</code>. They match.</li>
+<li>He sums it up: "PyTorch indexing is awesome." <code>C[X]</code> embeds every example at once.</li>
+</ul>
+<div class="oneline"><small>In one line</small>C[X] looks up every integer of X in one go: (32, 3) integers become (32, 3, 2) numbers.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c11" data-title="The hidden layer, and a shape problem" data-num="11" data-track><header class="chead"><span class="num">11</span><h2>The hidden layer, and a shape problem</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1110s" target="_blank" rel="noopener" title="Open the video at 18:30">&#9654; 18:30</a></header><div class="body">
+<p>Hidden layer weights <code>W1</code> and bias <code>b1</code>. Inputs per example: 3 letters × 2 numbers = <b>6</b>. How many neurons? Our choice: <b>100</b>.</p>
+<pre class="code" data-lang="python"><code>W1 = torch.randn((6, 100))
+b1 = torch.randn(100)
+
+emb @ W1 + b1
+# RuntimeError: mat1 and mat2 shapes cannot be multiplied (96x2 and 6x100)</code></pre>
+<div class="callout gotcha"><b class="ctitle">Why it fails</b><div><code>emb</code> is <span class="shape">(32, 3, 2)</span> (the three embeddings are stacked), but the layer needs <span class="shape">(32, 6)</span>: the three embeddings <b>side by side</b>.</div></div>
+<p>He shows three ways to do the gluing: "there are usually many ways of implementing what you'd like to do in torch". Some are faster, better or shorter.</p>
+<div class="oneline"><small>In one line</small>emb is (32, 3, 2) but the layer needs (32, 6): the three embeddings must be glued side by side.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c12" data-title="Way 1: torch.cat" data-num="12" data-track><header class="chead"><span class="num">12</span><h2>Way 1: torch.cat</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1200s" target="_blank" rel="noopener" title="Open the video at 20:00">&#9654; 20:00</a></header><div class="body">
+<p><code>torch.cat</code> joins a list of tensors along one dimension.</p>
+<pre class="code" data-lang="python"><code>torch.cat([emb[:, 0, :], emb[:, 1, :], emb[:, 2, :]], 1).shape    # (32, 6)</code></pre>
+<ul>
+<li><code>emb[:, 0, :]</code> is the first letter's embedding for <b>all</b> examples: <span class="shape">(32, 2)</span>. Same for 1 and 2.</li>
+<li>Join along dimension <b>1</b> (side by side), not 0 (which would stack them taller).</li>
+<li>It works, but it is "kind of ugly": we typed the number 3 into the code, so a different block size breaks it.</li>
+</ul>
+<div class="oneline"><small>In one line</small>cat along dimension 1 glues pieces side by side, but this version only works for block size 3.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c13" data-title="Way 2: torch.unbind" data-num="13" data-track><header class="chead"><span class="num">13</span><h2>Way 2: torch.unbind</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1320s" target="_blank" rel="noopener" title="Open the video at 22:00">&#9654; 22:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>torch.cat(torch.unbind(emb, 1), 1).shape    # (32, 6)</code></pre>
+<ul>
+<li><code>unbind</code> removes one dimension and returns a <b>tuple of all the slices</b> along it. Here: three tensors of <span class="shape">(32, 2)</span>.</li>
+<li>That is exactly the list we typed by hand. Now it works for <b>any</b> block size: 3, 5, 10.</li>
+<li>But there is a much better way (next card).</li>
+</ul>
+<div class="oneline"><small>In one line</small>unbind splits a dimension into a list, so cat(unbind(emb, 1), 1) works for any block size.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c14" data-title="Way 3: view, the free reshape" data-num="14" data-track><header class="chead"><span class="num">14</span><h2>Way 3: view, the free reshape</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1410s" target="_blank" rel="noopener" title="Open the video at 23:30">&#9654; 23:30</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 760 278" role="img" aria-label="view reads the same storage in different shapes"><text class="t" x="10" y="22" text-anchor="start">a = torch.arange(18)</text><text class="ts" x="30" y="44" text-anchor="start">storage (never changes): one flat row of 18 numbers</text><rect class="cell" x="30" y="52" width="32" height="28"/><text class="tmono" x="46.0" y="71" text-anchor="middle">0</text><rect class="cell" x="62" y="52" width="32" height="28"/><text class="tmono" x="78.0" y="71" text-anchor="middle">1</text><rect class="cell" x="94" y="52" width="32" height="28"/><text class="tmono" x="110.0" y="71" text-anchor="middle">2</text><rect class="cell" x="126" y="52" width="32" height="28"/><text class="tmono" x="142.0" y="71" text-anchor="middle">3</text><rect class="cell" x="158" y="52" width="32" height="28"/><text class="tmono" x="174.0" y="71" text-anchor="middle">4</text><rect class="cell" x="190" y="52" width="32" height="28"/><text class="tmono" x="206.0" y="71" text-anchor="middle">5</text><rect class="cell" x="222" y="52" width="32" height="28"/><text class="tmono" x="238.0" y="71" text-anchor="middle">6</text><rect class="cell" x="254" y="52" width="32" height="28"/><text class="tmono" x="270.0" y="71" text-anchor="middle">7</text><rect class="cell" x="286" y="52" width="32" height="28"/><text class="tmono" x="302.0" y="71" text-anchor="middle">8</text><rect class="cell" x="318" y="52" width="32" height="28"/><text class="tmono" x="334.0" y="71" text-anchor="middle">9</text><rect class="cell" x="350" y="52" width="32" height="28"/><text class="tmono" x="366.0" y="71" text-anchor="middle">10</text><rect class="cell" x="382" y="52" width="32" height="28"/><text class="tmono" x="398.0" y="71" text-anchor="middle">11</text><rect class="cell" x="414" y="52" width="32" height="28"/><text class="tmono" x="430.0" y="71" text-anchor="middle">12</text><rect class="cell" x="446" y="52" width="32" height="28"/><text class="tmono" x="462.0" y="71" text-anchor="middle">13</text><rect class="cell" x="478" y="52" width="32" height="28"/><text class="tmono" x="494.0" y="71" text-anchor="middle">14</text><rect class="cell" x="510" y="52" width="32" height="28"/><text class="tmono" x="526.0" y="71" text-anchor="middle">15</text><rect class="cell" x="542" y="52" width="32" height="28"/><text class="tmono" x="558.0" y="71" text-anchor="middle">16</text><rect class="cell" x="574" y="52" width="32" height="28"/><text class="tmono" x="590.0" y="71" text-anchor="middle">17</text><text class="ts" x="30" y="108" text-anchor="start">three ways to READ the same row:</text><rect class="box acc" x="32" y="116" width="284" height="20" rx="6"/><rect class="box acc" x="320" y="116" width="284" height="20" rx="6"/><text class="tm" x="620" y="131" text-anchor="start">a.view(2, 9)</text><rect class="box info" x="32" y="148" width="60" height="20" rx="6"/><rect class="box info" x="96" y="148" width="60" height="20" rx="6"/><rect class="box info" x="160" y="148" width="60" height="20" rx="6"/><rect class="box info" x="224" y="148" width="60" height="20" rx="6"/><rect class="box info" x="288" y="148" width="60" height="20" rx="6"/><rect class="box info" x="352" y="148" width="60" height="20" rx="6"/><rect class="box info" x="416" y="148" width="60" height="20" rx="6"/><rect class="box info" x="480" y="148" width="60" height="20" rx="6"/><rect class="box info" x="544" y="148" width="60" height="20" rx="6"/><text class="tm" x="620" y="163" text-anchor="start">a.view(9, 2)</text><rect class="box warn" x="32" y="180" width="188" height="20" rx="6"/><line class="dash" x1="94" y1="182" x2="94" y2="198"/><line class="dash" x1="158" y1="182" x2="158" y2="198"/><rect class="box warn" x="224" y="180" width="188" height="20" rx="6"/><line class="dash" x1="286" y1="182" x2="286" y2="198"/><line class="dash" x1="350" y1="182" x2="350" y2="198"/><rect class="box warn" x="416" y="180" width="188" height="20" rx="6"/><line class="dash" x1="478" y1="182" x2="478" y2="198"/><line class="dash" x1="542" y1="182" x2="542" y2="198"/><text class="tm" x="620" y="195" text-anchor="start">a.view(3, 3, 2)</text><rect class="box acc" x="30" y="222" width="700" height="44" rx="10"/><text class="t" x="380" y="242" text-anchor="middle">view copies nothing. It only changes the shape, strides and offset used to read the same storage.</text><text class="tm" x="380" y="259" text-anchor="middle">That makes it instant, unlike torch.cat, which builds a brand new tensor.</text></svg><figcaption>The numbers 0 to 17 never move. Only the way we group them changes.</figcaption></figure>
+<pre class="code" data-lang="python"><code>a = torch.arange(18)      # shape (18,)
+a.view(2, 9)              # 2 rows of 9
+a.view(9, 2)              # 9 rows of 2
+a.view(3, 3, 2)           # 3 blocks of 3 rows of 2
+
+emb.view(32, 6)           # exactly the glue we wanted</code></pre>
+<ul>
+<li>It works as long as the <b>total number of elements</b> stays the same.</li>
+<li>He checks it: <code>emb.view(32, 6) == torch.cat(torch.unbind(emb, 1), 1)</code> is <b>True everywhere</b>.</li>
+</ul>
+<div class="oneline"><small>In one line</small>view regroups the same numbers into a new shape, and emb.view(32, 6) is the glue step.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c15" data-title="Why view is free" data-num="15" data-track><header class="chead"><span class="num">15</span><h2>Why view is free</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1480s" target="_blank" rel="noopener" title="Open the video at 24:40">&#9654; 24:40</a></header><div class="body">
+<p class="lead">Every tensor keeps its numbers in <b>storage</b>: always one flat, one-dimensional row in memory.</p>
+<ul>
+<li><code>a.storage()</code> prints 0 to 17 in order, whatever shape <code>a</code> has.</li>
+<li><code>.view(...)</code> only changes some <b>attributes</b> that say how to read that row: the <b>storage offset</b>, the <b>strides</b> and the <b>shape</b>.</li>
+<li>So nothing is changed, copied, moved or created. It is "extremely efficient".</li>
+<li><code>torch.cat</code> cannot do that. It <b>creates a new tensor</b> with new memory.</li>
+</ul>
+<p class="hint">He recommends Eric's blog post “PyTorch Internals” and says he may make a video on it.</p>
+<div class="oneline"><small>In one line</small>view is nearly free because only metadata changes, while cat copies the data into new memory.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c16" data-title="The hidden activations" data-num="16" data-track><header class="chead"><span class="num">16</span><h2>The hidden activations</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1620s" target="_blank" rel="noopener" title="Open the video at 27:00">&#9654; 27:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>h = torch.tanh(emb.view(-1, 6) @ W1 + b1)     # (32, 100)</code></pre>
+<ul>
+<li>Don't type the 32. Use <code>emb.shape[0]</code> or <b>-1</b>: PyTorch works out the missing number so the element count matches.</li>
+<li><b>tanh</b> squeezes every value into the range <b>-1 to 1</b>.</li>
+<li><code>h</code> holds the <b>hidden activations</b>: 100 numbers for each of the 32 examples.</li>
+</ul>
+<div class="callout remember"><b class="ctitle">Where we are</b><div>Input <span class="shape">(32, 3)</span> → embed <span class="shape">(32, 3, 2)</span> → reshape <span class="shape">(32, 6)</span> → hidden <span class="shape">(32, 100)</span>.</div></div>
+<div class="oneline"><small>In one line</small>h = tanh(emb.view(-1, 6) @ W1 + b1) gives 100 numbers in [-1, 1] for each example.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c17" data-title="Check the bias broadcast" data-num="17" data-track><header class="chead"><span class="num">17</span><h2>Check the bias broadcast</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1695s" target="_blank" rel="noopener" title="Open the video at 28:15">&#9654; 28:15</a></header><div class="body">
+<p>One thing he had glossed over: the <code>+ b1</code>. Does broadcasting do what we want?</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 250" role="img" aria-label="Broadcasting the bias"><text class="t" x="10" y="22" text-anchor="start">h = emb.view(-1, 6) @ W1 + b1</text><rect class="cell" x="30" y="66" width="40" height="28"/><rect class="cell" x="70" y="66" width="40" height="28"/><rect class="cell" x="110" y="66" width="40" height="28"/><rect class="cell" x="150" y="66" width="40" height="28"/><rect class="cell" x="30" y="94" width="40" height="28"/><rect class="cell" x="70" y="94" width="40" height="28"/><rect class="cell" x="110" y="94" width="40" height="28"/><rect class="cell" x="150" y="94" width="40" height="28"/><rect class="cell" x="30" y="122" width="40" height="28"/><rect class="cell" x="70" y="122" width="40" height="28"/><rect class="cell" x="110" y="122" width="40" height="28"/><rect class="cell" x="150" y="122" width="40" height="28"/><text class="tmono" x="110" y="56" text-anchor="middle">(32, 100)</text><text class="ts" x="110" y="168" text-anchor="middle">32 rows, 100 columns</text><text class="big" x="200" y="114" text-anchor="middle">+</text><rect class="cell sum" x="240" y="94" width="40" height="28"/><rect class="cell sum" x="280" y="94" width="40" height="28"/><rect class="cell sum" x="320" y="94" width="40" height="28"/><rect class="cell sum" x="360" y="94" width="40" height="28"/><text class="tmono" x="320" y="56" text-anchor="middle">b1  (100)</text><text class="ts" x="320" y="168" text-anchor="middle">seen as (1, 100)</text><text class="big" x="430" y="114" text-anchor="middle">→</text><rect class="cell sum" x="470" y="66" width="40" height="28"/><rect class="cell sum" x="510" y="66" width="40" height="28"/><rect class="cell sum" x="550" y="66" width="40" height="28"/><rect class="cell sum" x="590" y="66" width="40" height="28"/><rect class="cell sum" x="470" y="94" width="40" height="28"/><rect class="cell sum" x="510" y="94" width="40" height="28"/><rect class="cell sum" x="550" y="94" width="40" height="28"/><rect class="cell sum" x="590" y="94" width="40" height="28"/><rect class="cell sum" x="470" y="122" width="40" height="28"/><rect class="cell sum" x="510" y="122" width="40" height="28"/><rect class="cell sum" x="550" y="122" width="40" height="28"/><rect class="cell sum" x="590" y="122" width="40" height="28"/><text class="tmono" x="550" y="56" text-anchor="middle">same b1 added to every row</text><text class="ts" x="550" y="168" text-anchor="middle">copied down 32 times</text><rect class="box acc" x="10" y="196" width="740" height="40" rx="10"/><text class="t" x="380" y="221" text-anchor="middle">Shapes line up from the right, so the size-1 row is stretched down. Here that is exactly what we want.</text></svg><figcaption>(32, 100) + (100): the bias becomes one row that is added to every example.</figcaption></figure>
+<ul>
+<li><span class="shape">(32, 100)</span> plus <span class="shape">(100)</span>: shapes line up from the <b>right</b>. PyTorch adds a fake dimension to b1, so it is <span class="shape">(1, 100)</span>, then <b>copies it down</b> over the 32 rows.</li>
+<li>So the same bias row goes to every example. That is correct.</li>
+<li>"It's always good practice to just make sure, so you don't shoot yourself in the foot."</li>
+</ul>
+<div class="oneline"><small>In one line</small>Broadcasting adds the same b1 to every example, which is what we want.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c18" data-title="The output layer: logits" data-num="18" data-track><header class="chead"><span class="num">18</span><h2>The output layer: logits</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1750s" target="_blank" rel="noopener" title="Open the video at 29:10">&#9654; 29:10</a></header><div class="body">
+<pre class="code" data-lang="python"><code>W2 = torch.randn((100, 27))
+b2 = torch.randn(27)
+logits = h @ W2 + b2          # (32, 27)</code></pre>
+<ul>
+<li>27 outputs, because there are <b>27 possible next characters</b>.</li>
+<li>These raw scores are the <b>logits</b>: one score per character, for each of the 32 examples.</li>
+</ul>
+<div class="oneline"><small>In one line</small>logits (32, 27) hold one raw score per possible next character, for each example.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c19" data-title="Softmax by hand" data-num="19" data-track><header class="chead"><span class="num">19</span><h2>Softmax by hand</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1790s" target="_blank" rel="noopener" title="Open the video at 29:50">&#9654; 29:50</a></header><div class="body">
+<p>Exactly as in the last video: make the scores positive with <code>exp</code>, then divide each row by its total.</p>
+<pre class="code" data-lang="python"><code>counts = logits.exp()
+prob = counts / counts.sum(1, keepdims=True)     # (32, 27)
+prob[0].sum()                                    # 1.0  (every row sums to one)</code></pre>
+<ul>
+<li><code>keepdims=True</code> keeps the row sums as a column <span class="shape">(32, 1)</span>, so each row is divided by its <b>own</b> total.</li>
+</ul>
+<div class="oneline"><small>In one line</small>exp, then divide by the row sum, turns logits into probabilities.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c20" data-title="The loss: pluck the right probability" data-num="20" data-track><header class="chead"><span class="num">20</span><h2>The loss: pluck the right probability</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1830s" target="_blank" rel="noopener" title="Open the video at 30:30">&#9654; 30:30</a></header><div class="body">
+<p>For each example we want the probability the net gave to the <b>true</b> next character (from <code>Y</code>).</p>
+<pre class="code" data-lang="python"><code>prob[torch.arange(32), Y]                        # one probability per example
+loss = -prob[torch.arange(32), Y].log().mean()   # tensor(17.2955)</code></pre>
+<ul>
+<li><code>torch.arange(32)</code> walks down the rows. <code>Y</code> says which <b>column</b> to take in each row.</li>
+<li>Some values are about 0.2. Many are tiny, like 0.0000001: the net thinks the true answer is very unlikely. It is untrained, so that is no surprise.</li>
+<li>Ideally every number is 1. The loss starts around <b>17</b> and we want it down.</li>
+</ul>
+<div class="callout why"><b class="ctitle">My note</b><div>Guessing uniformly over 27 letters would score about ln 27 ≈ 3.3. A loss of 17 is far worse than guessing: the random weights are confidently wrong.</div></div>
+<div class="oneline"><small>In one line</small>The loss is the average negative log of the probability given to the true next letter; untrained it is about 17.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c21" data-title="Tidy up: one parameters list, a seed" data-num="21" data-track><header class="chead"><span class="num">21</span><h2>Tidy up: one parameters list, a seed</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1940s" target="_blank" rel="noopener" title="Open the video at 32:20">&#9654; 32:20</a></header><div class="body">
+<pre class="code" data-lang="python"><code>g = torch.Generator().manual_seed(2147483647)    # for reproducibility
+C  = torch.randn((27, 2),   generator=g)
+W1 = torch.randn((6, 100),  generator=g)
+b1 = torch.randn(100,       generator=g)
+W2 = torch.randn((100, 27), generator=g)
+b2 = torch.randn(27,        generator=g)
+parameters = [C, W1, b1, W2, b2]
+
+sum(p.nelement() for p in parameters)            # 3481</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 760 254" role="img" aria-label="The network we build, with shapes"><rect class="box" x="10" y="40" width="108" height="64" rx="10"/><text class="t" x="64.0" y="68.5" text-anchor="middle">X</text><text class="tm" x="64.0" y="84.5" text-anchor="middle">(32, 3)</text><line class="ln" x1="118" y1="72" x2="136" y2="72" marker-end="url(#arr)"/><rect class="box acc" x="136" y="40" width="108" height="64" rx="10"/><text class="t" x="190.0" y="68.5" text-anchor="middle">C[X]</text><text class="tm" x="190.0" y="84.5" text-anchor="middle">(32, 3, 2)</text><line class="ln" x1="244" y1="72" x2="262" y2="72" marker-end="url(#arr)"/><rect class="box" x="262" y="40" width="108" height="64" rx="10"/><text class="t" x="316.0" y="68.5" text-anchor="middle">view</text><text class="tm" x="316.0" y="84.5" text-anchor="middle">(32, 6)</text><line class="ln" x1="370" y1="72" x2="388" y2="72" marker-end="url(#arr)"/><rect class="box acc" x="388" y="40" width="108" height="64" rx="10"/><text class="t" x="442.0" y="68.5" text-anchor="middle">tanh layer</text><text class="tm" x="442.0" y="84.5" text-anchor="middle">(32, 100)</text><line class="ln" x1="496" y1="72" x2="514" y2="72" marker-end="url(#arr)"/><rect class="box acc" x="514" y="40" width="108" height="64" rx="10"/><text class="t" x="568.0" y="68.5" text-anchor="middle">logits</text><text class="tm" x="568.0" y="84.5" text-anchor="middle">(32, 27)</text><line class="ln" x1="622" y1="72" x2="640" y2="72" marker-end="url(#arr)"/><rect class="box warn" x="640" y="40" width="108" height="64" rx="10"/><text class="t" x="694.0" y="68.5" text-anchor="middle">loss</text><text class="tm" x="694.0" y="84.5" text-anchor="middle">one number</text><text class="ts" x="127.0" y="30" text-anchor="middle">look up</text><text class="ts" x="253.0" y="30" text-anchor="middle">reshape</text><text class="ts" x="379.0" y="30" text-anchor="middle">@ W1 + b1, tanh</text><text class="ts" x="505.0" y="30" text-anchor="middle">@ W2 + b2</text><text class="ts" x="631.0" y="30" text-anchor="middle">cross_entropy</text><text class="ts" x="10" y="20" text-anchor="middle"></text><line class="dash" x1="190.0" y1="104" x2="190.0" y2="136"/><rect class="box info" x="136" y="136" width="108" height="70" rx="10"/><text class="t" x="190.0" y="159.5" text-anchor="middle">C</text><text class="tm" x="190.0" y="175.5" text-anchor="middle">(27, 2)</text><text class="tm" x="190.0" y="191.5" text-anchor="middle">= 54</text><line class="dash" x1="442.0" y1="104" x2="442.0" y2="136"/><rect class="box info" x="388" y="136" width="108" height="70" rx="10"/><text class="t" x="442.0" y="159.5" text-anchor="middle">W1 (6, 100)</text><text class="tm" x="442.0" y="175.5" text-anchor="middle">b1 (100)</text><text class="tm" x="442.0" y="191.5" text-anchor="middle">= 700</text><line class="dash" x1="568.0" y1="104" x2="568.0" y2="136"/><rect class="box info" x="514" y="136" width="108" height="70" rx="10"/><text class="t" x="568.0" y="159.5" text-anchor="middle">W2 (100, 27)</text><text class="tm" x="568.0" y="175.5" text-anchor="middle">b2 (27)</text><text class="tm" x="568.0" y="191.5" text-anchor="middle">= 2,727</text><text class="t" x="380" y="238" text-anchor="middle">54 + 700 + 2,727  =  3,481 parameters, all trained together</text></svg><figcaption>A batch of 32 examples flows left to right. The blue boxes are the learnable parameters.</figcaption></figure>
+<ul>
+<li>A seeded <b>generator</b> makes the random start repeatable.</li>
+<li>All learnable tensors go into <b>one list</b>, so counting and updating them is easy.</li>
+<li>The whole forward pass is now six lines. With these seeded weights the starting loss is <b>17.77</b>.</li>
+</ul>
+<div class="oneline"><small>In one line</small>All learnable tensors live in one list, parameters: 3,481 numbers to learn.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c22" data-title="Use F.cross_entropy instead" data-num="22" data-track><header class="chead"><span class="num">22</span><h2>Use F.cross_entropy instead</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=1980s" target="_blank" rel="noopener" title="Open the video at 33:00">&#9654; 33:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>loss = F.cross_entropy(logits, Y)       # tensor(17.7697), the same number</code></pre>
+<p>This one call replaces the three lines (<code>exp</code>, normalise, pluck and average the log). He wrote them by hand "for educational reasons", but "you'd never use this in practice". Why:</p>
+<ol>
+<li><b>Faster.</b> PyTorch does not create all the in-between tensors. It uses <b>fused kernels</b>: many steps in one.</li>
+<li><b>Simpler backward pass.</b> Like <code>tanh</code> in micrograd, where the derivative is just 1 − t², the whole expression has a much simpler derivative than its parts.</li>
+<li><b>Safer numbers.</b> The next two cards.</li>
+</ol>
+<div class="oneline"><small>In one line</small>F.cross_entropy(logits, Y) gives the same loss, but faster, simpler to differentiate and safer.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c23" data-title="Danger: exp can overflow" data-num="23" data-track><header class="chead"><span class="num">23</span><h2>Danger: exp can overflow</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2100s" target="_blank" rel="noopener" title="Open the video at 35:00">&#9654; 35:00</a></header><div class="body">
+<p>See what happens to the probabilities for different logits (4 numbers instead of 27, to keep it small):</p>
+<table class="t"><tr><th>logits</th><th>result</th></tr>
+<tr><td class="m">[-2, -3, 0, 5]</td><td class="m">[0.0009, 0.0003, 0.0067, 0.9921]  fine</td></tr>
+<tr><td class="m">[-100, -3, 0, 5]</td><td>still fine: exp(-100) is just a tiny number near 0</td></tr>
+<tr class="hl"><td class="m">[-100, -3, 0, 100]</td><td class="m">[0, 0, 0, nan]  broken</td></tr></table>
+<ul>
+<li>Very <b>negative</b> logits are harmless. Very <b>positive</b> ones are not: <code>exp(100)</code> is <b>inf</b>, because the float runs out of range.</li>
+<li><code>inf</code> divided by <code>inf</code> gives <b>nan</b>.</li>
+<li>Logits can grow large during optimisation, so this really can happen.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Very large positive logits make exp overflow to inf, and the probabilities turn into nan.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c24" data-title="The fix: subtract the biggest logit" data-num="24" data-track><header class="chead"><span class="num">24</span><h2>The fix: subtract the biggest logit</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2200s" target="_blank" rel="noopener" title="Open the video at 36:40">&#9654; 36:40</a></header><div class="body">
+<p class="lead">Adding or subtracting the <b>same number</b> from every logit changes <b>nothing</b>: the probabilities come out identical.</p>
+<div class="formula"><i>softmax</i>(<i>x</i> − <i>c</i>) = <i>softmax</i>(<i>x</i>)</div>
+<ul>
+<li>PyTorch finds the <b>largest logit</b> and subtracts it first. The biggest becomes 0 and the others become negative.</li>
+<li>Negative numbers are safe for <code>exp</code>, so it can never overflow.</li>
+</ul>
+<pre class="code" data-lang="python"><code>logits = torch.tensor([-5, -3, 0, 5]) - 5      # shifted by the max
+probs  = logits.exp() / logits.exp().sum()     # [4.5e-05, 3.3e-04, 6.7e-03, 0.993]</code></pre>
+<p>Even the broken case works once you subtract 100. <code>F.softmax</code>, used when sampling later, has the same protection.</p>
+<p>That makes <b>three</b> reasons to call <code>cross_entropy</code>: a faster forward pass, a faster backward pass, and numbers that stay well-behaved.</p>
+<div class="oneline"><small>In one line</small>Subtracting the biggest logit before exp changes nothing mathematically and prevents overflow.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="t2" data-title="Test 2: the forward pass" data-num="T2" data-track><header class="chead"><span class="num">T2</span><h2>Test 2: the forward pass</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2280s" target="_blank" rel="noopener" title="Open the video at 38:00">&#9654; 38:00</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>What is block_size, and what shapes do X and Y have for five names?</span></summary><div class="ans">block_size is how many previous characters predict the next one (3 here). Five names give 32 examples, so X is (32, 3) and Y is (32), both integers.</div></details><details class="q"><summary><span>Why does C[5] give the same result as one_hot(5) @ C?</span></summary><div class="ans">The one-hot vector has a single 1, so the multiplication keeps only row 5 of C and zeros out everything else. Indexing is the faster way to do the same thing.</div></details><details class="q"><summary><span>Why did emb @ W1 fail, and what is the best fix?</span></summary><div class="ans">emb is (32, 3, 2) but W1 needs (32, 6). The best fix is <code>emb.view(-1, 6)</code>, which is free because it only changes how the same storage is read. cat and unbind also work but copy memory.</div></details><details class="q"><summary><span>How many parameters does the 100-neuron network have?</span></summary><div class="ans">27×2 (C) + 6×100 + 100 (W1, b1) + 100×27 + 27 (W2, b2) = 54 + 700 + 2,727 = <b>3,481</b>.</div></details><details class="q"><summary><span>Why does adding b1 of shape (100) to a (32, 100) tensor work?</span></summary><div class="ans">Broadcasting lines shapes up from the right, treats b1 as (1, 100) and copies it down every row. Each example gets the same bias.</div></details><details class="q"><summary><span>What loss does the untrained net start at, and what does that tell you?</span></summary><div class="ans">About 17. Uniform guessing would be about 3.3, so the random weights are confidently wrong.</div></details><details class="q"><summary><span>Give three reasons to use F.cross_entropy.</span></summary><div class="ans">It avoids making many intermediate tensors (fused kernels), its backward pass is simpler, and it is numerically safe.</div></details><details class="q"><summary><span>Why can exp overflow, and how is it fixed?</span></summary><div class="ans">A large positive logit makes exp(x) inf, then inf/inf is nan. Subtract the largest logit first; the probabilities do not change.</div></details><div class="oneline"><small>In one line</small>If you can answer these, the forward pass is done.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p2" data-short="Part 2 · Training"><div class="kicker">Part 2 · 38:00 – 53:00</div><h2>Make the loss go down</h2><p>The training loop, mini-batches, and a sensible way to choose the learning rate.</p></section><section class="concept" id="c25" data-title="The training loop" data-num="25" data-track><header class="chead"><span class="num">25</span><h2>The training loop</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2282s" target="_blank" rel="noopener" title="Open the video at 38:02">&#9654; 38:02</a></header><div class="body">
+<pre class="code" data-lang="python"><code>for p in parameters:
+    p.requires_grad = True
+
+for _ in range(1000):
+    # forward pass
+    emb = C[X]                                    # (32, 3, 2)
+    h = torch.tanh(emb.view(-1, 6) @ W1 + b1)     # (32, 100)
+    logits = h @ W2 + b2                          # (32, 27)
+    loss = F.cross_entropy(logits, Y)
+    # backward pass
+    for p in parameters:
+        p.grad = None
+    loss.backward()
+    # update
+    for p in parameters:
+        p.data += -0.1 * p.grad
+
+print(loss.item())</code></pre>
+<ol>
+<li><b>Forward pass</b> to get the loss.</li>
+<li><b>Reset gradients.</b> <code>p.grad = None</code> is the same as zero in PyTorch.</li>
+<li><b>loss.backward()</b> fills every parameter's gradient.</li>
+<li><b>Update:</b> nudge each parameter a little against its gradient. Here the step size is 0.1.</li>
+</ol>
+<div class="callout gotcha"><b class="ctitle">Don't forget</b><div><code>requires_grad = True</code> on every parameter first. Without it, <code>backward()</code> has nothing to fill.</div></div>
+<div class="oneline"><small>In one line</small>Each step: forward, clear gradients, backward, then move every parameter against its gradient.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c26" data-title="Overfit one batch first" data-num="26" data-track><header class="chead"><span class="num">26</span><h2>Overfit one batch first</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2360s" target="_blank" rel="noopener" title="Open the video at 39:20">&#9654; 39:20</a></header><div class="body">
+<p>Still using only the 32 examples from 5 names. Run it and the loss falls from 17 to about <b>0.25</b> in 1,000 steps.</p>
+<ul>
+<li>The reason it is so easy: <b>3,481 parameters</b> but only <b>32 examples</b>. The net can simply memorise them.</li>
+<li>This is called <b>overfitting a single batch</b>.</li>
+<li>It is a useful sanity check: the pipeline works, the loss goes down. But it says nothing yet about how good the model is.</li>
+</ul>
+<div class="oneline"><small>In one line</small>With 3,481 parameters and only 32 examples the net memorises them (loss about 0.25), so the loop works.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c27" data-title="Why the loss can't hit exactly zero" data-num="27" data-track><header class="chead"><span class="num">27</span><h2>Why the loss can't hit exactly zero</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2400s" target="_blank" rel="noopener" title="Open the video at 40:00">&#9654; 40:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>logits.max(1)      # best score and its index, for each example</code></pre>
+<ul>
+<li>The best indices are <b>almost</b> the labels, but not always. In the first example the net picks index 19, while the label is 5.</li>
+<li>The cause: the empty context <code>...</code> is followed by <b>e</b> in one name, <b>o</b> in another, then <b>i</b> and <b>s</b>. <b>Same input, several correct answers.</b> The net cannot get all of them right.</li>
+<li>Where an input has <b>one</b> answer, it fits perfectly.</li>
+</ul>
+<div class="oneline"><small>In one line</small>The same input can have several correct labels (the start of names), so the loss can't reach zero.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c28" data-title="Now use all the data" data-num="28" data-track><header class="chead"><span class="num">28</span><h2>Now use all the data</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2480s" target="_blank" rel="noopener" title="Open the video at 41:20">&#9654; 41:20</a></header><div class="body">
+<p>Remove the <code>[:5]</code> and the prints so every name is used.</p>
+<ul>
+<li>That makes <b>228,146 examples</b> instead of 32. The network is the same size, with the same 3,481 parameters.</li>
+<li>It trains, but every step now does a forward and backward pass over all 228,146 examples. That is far too slow.</li>
+</ul>
+<div class="oneline"><small>In one line</small>On the full data (228,146 examples) a step over everything is too slow.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c29" data-title="Mini-batches" data-num="29" data-track><header class="chead"><span class="num">29</span><h2>Mini-batches</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2550s" target="_blank" rel="noopener" title="Open the video at 42:30">&#9654; 42:30</a></header><div class="body">
+<p>In practice people update on a <b>small random piece</b> of the data each step: a <b>mini-batch</b>.</p>
+<pre class="code" data-lang="python"><code>ix = torch.randint(0, X.shape[0], (32,))     # 32 random row numbers
+emb = C[X[ix]]                               # (32, 3, 2)
+h = torch.tanh(emb.view(-1, 6) @ W1 + b1)
+logits = h @ W2 + b2
+loss = F.cross_entropy(logits, Y[ix])        # the same ix picks the labels</code></pre>
+<ul>
+<li>Each step is now "almost instant".</li>
+<li>The gradient from 32 examples is only an <b>estimate</b>, but it points the right way. His words: "it's much better to have an approximate gradient and take more steps than to evaluate the exact gradient and take fewer steps."</li>
+<li>The printed loss is for <b>that mini-batch only</b>, so it is noisy. To see the real picture, compute the loss on all of X and Y now and then. After 1,000 steps it is about <b>2.6</b>.</li>
+</ul>
+<div class="callout gotcha"><b class="ctitle">Use the same ix</b><div>The labels must be picked with the same random numbers as the inputs: <code>X[ix]</code> and <code>Y[ix]</code>.</div></div>
+<div class="oneline"><small>In one line</small>Train on random mini-batches: a rough gradient taken many times beats an exact one taken rarely.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c30" data-title="Is 0.1 the right step size? Bracket it" data-num="30" data-track><header class="chead"><span class="num">30</span><h2>Is 0.1 the right step size? Bracket it</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2730s" target="_blank" rel="noopener" title="Open the video at 45:30">&#9654; 45:30</a></header><div class="body">
+<p>So far 0.1 was a guess. Here is a way to <b>find</b> a good learning rate. First, find a rate that is clearly too slow and one that is clearly too wild.</p>
+<p>Reset the weights, run about 100 steps with a rate, and watch the loss:</p>
+<table class="t"><tr><th>learning rate</th><th>what he saw</th></tr>
+<tr><td class="m">very small</td><td>loss barely moves: too low</td></tr>
+<tr><td class="m">a bit larger</td><td>decreasing, but slowly: a fair <b>low</b> end</td></tr>
+<tr><td class="m">1</td><td>goes down but jumps up and down: already fast</td></tr>
+<tr><td class="m">10</td><td>not optimising at all: way too big</td></tr></table>
+<p>Conclusion: the right value is somewhere between <b>0.001 and 1</b>.</p>
+<div class="oneline"><small>In one line</small>Try rates by hand to find one clearly too slow and one clearly too wild.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c31" data-title="Sweep the learning rate" data-num="31" data-track><header class="chead"><span class="num">31</span><h2>Sweep the learning rate</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2820s" target="_blank" rel="noopener" title="Open the video at 47:00">&#9654; 47:00</a></header><div class="body">
+<p>Instead of guessing, try <b>1,000 rates</b> from 0.001 to 1, one per step, and record the loss each time.</p>
+<pre class="code" data-lang="python"><code>lre = torch.linspace(-3, 0, 1000)     # 1000 exponents from -3 to 0
+lrs = 10**lre                         # 0.001 ... 1
+
+lri, lossi = [], []
+for i in range(1000):
+    ...                               # forward and backward as before
+    lr = lrs[i]                       # a larger rate every step
+    for p in parameters:
+        p.data += -lr * p.grad
+    lri.append(lre[i])                # keep the exponent for the x-axis
+    lossi.append(loss.item())</code></pre>
+<ul>
+<li>Stepping evenly between the <b>exponents</b> -3 and 0 spaces the rates <b>exponentially</b>: many small ones, fewer big ones. Linear spacing would waste almost all the steps on large rates.</li>
+<li>Start from fresh random weights, then plot <code>lri</code> against <code>lossi</code>.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Raise the learning rate a little each step, on a log scale, and record the loss at each one.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c32" data-title="Read the plot, pick the rate" data-num="32" data-track><header class="chead"><span class="num">32</span><h2>Read the plot, pick the rate</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2970s" target="_blank" rel="noopener" title="Open the video at 49:30">&#9654; 49:30</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 760 280" role="img" aria-label="Loss against learning rate"><line class="axis" x1="80" y1="210" x2="700" y2="210"/><line class="axis" x1="80" y1="28" x2="80" y2="210"/><line class="grid" x1="80.0" y1="28" x2="80.0" y2="210"/><text class="tmono" x="80.0" y="228" text-anchor="middle">0.001</text><text class="ts" x="80.0" y="244" text-anchor="middle">10^−3</text><line class="grid" x1="286.66666666666663" y1="28" x2="286.66666666666663" y2="210"/><text class="tmono" x="286.66666666666663" y="228" text-anchor="middle">0.01</text><text class="ts" x="286.66666666666663" y="244" text-anchor="middle">10^−2</text><line class="grid" x1="493.3333333333333" y1="28" x2="493.3333333333333" y2="210"/><text class="tmono" x="493.3333333333333" y="228" text-anchor="middle">0.1</text><text class="ts" x="493.3333333333333" y="244" text-anchor="middle">10^−1</text><line class="grid" x1="700.0" y1="28" x2="700.0" y2="210"/><text class="tmono" x="700.0" y="228" text-anchor="middle">1</text><text class="ts" x="700.0" y="244" text-anchor="middle">10^0</text><text class="ts" x="72" y="179.2" text-anchor="end">5</text><text class="ts" x="72" y="144.39999999999998" text-anchor="end">10</text><text class="ts" x="72" y="109.60000000000001" text-anchor="end">15</text><text class="ts" x="72" y="74.79999999999998" text-anchor="end">20</text><polyline class="curve" points="80.0,56.9 90.3,61.0 100.7,65.0 111.0,69.0 121.3,73.0 131.7,77.0 142.0,80.9 152.3,84.8 162.7,88.7 173.0,92.6 183.3,96.4 193.7,100.2 204.0,103.9 214.3,107.7 224.7,111.4 235.0,115.0 245.3,118.6 255.7,122.2 266.0,125.8 276.3,129.3 286.7,132.7 297.0,136.1 307.3,139.5 317.7,142.8 328.0,146.1 338.3,149.3 348.7,152.5 359.0,155.6 369.3,158.7 379.7,161.7 390.0,164.6 400.3,167.5 410.7,170.2 421.0,172.9 431.3,175.5 441.7,178.0 452.0,180.4 462.3,182.6 472.7,184.6 483.0,186.4 493.3,187.7 503.7,187.4 514.0,186.7 524.3,185.9 534.7,184.9 545.0,183.7 555.3,182.5 565.7,181.1 576.0,179.6 586.3,178.1 596.7,176.4 607.0,174.7 617.3,172.8 627.7,171.0 638.0,169.0 648.3,166.9 658.7,164.8 669.0,162.6 679.3,160.4 689.7,158.1 700.0,155.7"/><line class="dash" x1="493.3333333333333" y1="187.728" x2="493.3333333333333" y2="210"/><circle class="pt acc" cx="493.3333333333333" cy="187.728" r="6"/><text class="t" x="485.3333333333333" y="165.728" text-anchor="end">valley: lr ≈ 0.1</text><text class="tm" x="183.33333333333331" y="147.36" text-anchor="middle">too low: barely moves</text><text class="tm" x="648.3333333333333" y="119.36000000000001" text-anchor="middle">too high: unstable</text><text class="ts" x="10" y="14" text-anchor="start">loss</text><text class="tm" x="390.0" y="264" text-anchor="middle">learning rate, spaced on a log scale (exponent from −3 to 0)</text></svg><figcaption>Schematic with the shape of the real plot: high on the left, a valley near exponent −1, and instability near 0.</figcaption></figure>
+<ul>
+<li><b>Left:</b> the rate is so low that "barely anything happened".</li>
+<li><b>Middle:</b> a nice valley. The loss gets low.</li>
+<li><b>Right:</b> as the rate grows the loss becomes unstable and rises.</li>
+<li>The valley is around exponent <b>−1</b>, and 10<sup>−1</sup> = <b>0.1</b>. That is the rate we were using, so now we have confidence in it.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Pick the learning rate from the bottom of the valley: here 10^-1 = 0.1.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c33" data-title="Train longer, then decay" data-num="33" data-track><header class="chead"><span class="num">33</span><h2>Train longer, then decay</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3060s" target="_blank" rel="noopener" title="Open the video at 51:00">&#9654; 51:00</a></header><div class="body">
+<p>Set the rate to 0.1, reset the weights and run many more steps.</p>
+<ul>
+<li>The loss on all the data drops to about <b>2.48</b>, then <b>2.46</b>.</li>
+<li>Near the end, do a <b>learning rate decay</b>: divide the rate by 10 (to 0.01) and take more steps. The loss reaches about <b>2.3</b>.</li>
+<li>Last video's bigram scored <b>2.45</b>, so this net has already <b>beaten it</b>.</li>
+</ul>
+<p>The recipe, roughly: <b>find a decent rate, train with it for a while, then lower it by a factor of 10 for the last steps.</b></p>
+<p class="hint">He says this is "janky and not exactly how you would train it in production".</p>
+<div class="oneline"><small>In one line</small>Find a good rate, train, then divide it by 10 near the end: about 2.3, beating the bigram's 2.45.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="t3" data-title="Test 3: training" data-num="T3" data-track><header class="chead"><span class="num">T3</span><h2>Test 3: training</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3180s" target="_blank" rel="noopener" title="Open the video at 53:00">&#9654; 53:00</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>What are the four steps of one training iteration?</span></summary><div class="ans">Forward pass to get the loss; set every <code>p.grad = None</code>; <code>loss.backward()</code>; update <code>p.data += -lr * p.grad</code>.</div></details><details class="q"><summary><span>Why did the loss on 32 examples fall to about 0.25 but not to 0?</span></summary><div class="ans">The net memorised the batch (3,481 parameters, 32 examples). Zero was impossible because the same input (<code>...</code>) has several correct next letters.</div></details><details class="q"><summary><span>Why use mini-batches? What is the trade-off?</span></summary><div class="ans">A full-data step is slow. A mini-batch gives only an approximate gradient, but many cheap approximate steps beat a few exact ones.</div></details><details class="q"><summary><span>Why must X[ix] and Y[ix] use the same ix?</span></summary><div class="ans">Otherwise the labels would not match the inputs.</div></details><details class="q"><summary><span>How do you find a good learning rate?</span></summary><div class="ans">Bracket it by hand (too slow, too wild), then sweep 1,000 rates from 0.001 to 1 while recording the loss, and pick the bottom of the valley.</div></details><details class="q"><summary><span>Why step through the exponent (linspace(-3, 0)) instead of the rate itself?</span></summary><div class="ans">It spaces the rates exponentially, so each size of rate (0.001, 0.01, 0.1, 1) gets a fair share of steps.</div></details><details class="q"><summary><span>What is learning rate decay?</span></summary><div class="ans">Dividing the rate by about 10 late in training, to take smaller steps while the loss levels out.</div></details><div class="oneline"><small>In one line</small>If you can answer these, training is done.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p3" data-short="Part 3 · Honest scoring"><div class="kicker">Part 3 · 53:00 – 1:15:39</div><h2>Splits, scaling up, and the final score</h2><p>Why training loss isn't enough, how to split the data, and how the model improves.</p></section><section class="concept" id="c34" data-title="Lower loss is not the whole story" data-num="34" data-track><header class="chead"><span class="num">34</span><h2>Lower loss is not the whole story</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3200s" target="_blank" rel="noopener" title="Open the video at 53:20">&#9654; 53:20</a></header><div class="body">
+<p class="lead">Our net is still small. But nets can grow: 10,000, 100,000, millions of parameters.</p>
+<ul>
+<li>The more <b>capacity</b>, the better a net can <b>overfit</b>: the training loss can fall to almost zero.</li>
+<li>But then the net is just <b>memorising the training set word for word</b>.</li>
+<li>If you sample from it, you get <b>exactly the training names</b>, nothing new.</li>
+<li>If you measure the loss on <b>names it has not seen</b>, it can be very high. It is not a good model.</li>
+</ul>
+<p>So we need a fair test: data the net never trained on.</p>
+<div class="oneline"><small>In one line</small>A model can drive the training loss to zero by memorising, so training loss alone can't tell you if it is good.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c35" data-title="Three splits: train, dev, test" data-num="35" data-track><header class="chead"><span class="num">35</span><h2>Three splits: train, dev, test</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3270s" target="_blank" rel="noopener" title="Open the video at 54:30">&#9654; 54:30</a></header><div class="body">
+<figure class="fig"><svg class="d" viewBox="0 0 760 240" role="img" aria-label="Train, dev and test splits"><text class="t" x="10" y="22" text-anchor="start">all 32,033 names, shuffled once, then cut in three</text><rect class="box acc" x="30" y="40" width="560" height="40" rx="8"/><text class="t" x="310.0" y="65" text-anchor="middle">train  80%</text><rect class="box info" x="590" y="40" width="70" height="40" rx="8"/><text class="t" x="625.0" y="65" text-anchor="middle">dev 10%</text><rect class="box warn" x="660" y="40" width="70" height="40" rx="8"/><text class="t" x="695.0" y="65" text-anchor="middle">test 10%</text><rect class="box acc" x="10" y="104" width="330" height="70" rx="10"/><text class="t" x="175.0" y="127.5" text-anchor="middle">TRAIN</text><text class="tm" x="175.0" y="143.5" text-anchor="middle">fits the weights (gradient descent)</text><text class="tm" x="175.0" y="159.5" text-anchor="middle">182,625 examples · 25,626 names</text><rect class="box info" x="350" y="104" width="190" height="84" rx="10"/><text class="t" x="445.0" y="126.5" text-anchor="middle">DEV (validation)</text><text class="tm" x="445.0" y="142.5" text-anchor="middle">tunes the settings:</text><text class="tm" x="445.0" y="158.5" text-anchor="middle">hidden size, embedding size…</text><text class="tm" x="445.0" y="174.5" text-anchor="middle">22,655 examples</text><rect class="box warn" x="560" y="104" width="190" height="70" rx="10"/><text class="t" x="655.0" y="127.5" text-anchor="middle">TEST</text><text class="tm" x="655.0" y="143.5" text-anchor="middle">final exam: peek rarely</text><text class="tm" x="655.0" y="159.5" text-anchor="middle">22,866 examples</text><text class="tm" x="380" y="222" text-anchor="middle">Every look at the test loss that changes your mind quietly trains you on the test set.</text></svg><figcaption>Split sizes are from the notebook output. The words are shuffled with seed 42 before cutting.</figcaption></figure>
+<ul>
+<li><b>Train</b> (about 80%): used to fit the <b>parameters</b>, by gradient descent as we do.</li>
+<li><b>Dev</b> or validation (about 10%): used to choose the <b>hyperparameters</b>. Examples: the hidden layer size, the embedding size, the strength of regularisation (not used yet). Try many settings, keep the best on dev.</li>
+<li><b>Test</b> (about 10%): the final score. Look at it <b>very sparingly</b>.</li>
+</ul>
+<div class="callout gotcha"><b class="ctitle">Why test is special</b><div>Each time you look at the test loss and learn something from it, you are <b>training on the test set</b> a little. Look too often and you overfit it too.</div></div>
+<div class="oneline"><small>In one line</small>Train fits the weights, dev picks the settings, test gives the honest final score, and you rarely peek at it.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c36" data-title="Build the splits in code" data-num="36" data-track><header class="chead"><span class="num">36</span><h2>Build the splits in code</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3420s" target="_blank" rel="noopener" title="Open the video at 57:00">&#9654; 57:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>def build_dataset(words):
+    block_size = 3
+    X, Y = [], []
+    for w in words:
+        context = [0] * block_size
+        for ch in w + '.':
+            ix = stoi[ch]
+            X.append(context)
+            Y.append(ix)
+            context = context[1:] + [ix]
+    X = torch.tensor(X)
+    Y = torch.tensor(Y)
+    print(X.shape, Y.shape)
+    return X, Y
+
+import random
+random.seed(42)
+random.shuffle(words)
+n1 = int(0.8 * len(words))        # 25626
+n2 = int(0.9 * len(words))        # 28829
+
+Xtr,  Ytr  = build_dataset(words[:n1])      # 182,625 examples
+Xdev, Ydev = build_dataset(words[n1:n2])    #  22,655
+Xte,  Yte  = build_dataset(words[n2:])      #  22,866</code></pre>
+<ul>
+<li>The old dataset code became a <b>function</b>, so it can be reused for each split.</li>
+<li><b>Shuffle</b> the names first, then cut at 80% and 90% of the <b>names</b>.</li>
+</ul>
+<div class="callout why"><b class="ctitle">My note</b><div>In the captions he says round numbers like 25,000 and 28,000. The sizes above are read off the notebook on screen.</div></div>
+<div class="oneline"><small>In one line</small>build_dataset(words) turns any list of names into (X, Y); use it on 80% / 10% / 10% slices of the shuffled names.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c37" data-title="Train on train, check on dev" data-num="37" data-track><header class="chead"><span class="num">37</span><h2>Train on train, check on dev</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3510s" target="_blank" rel="noopener" title="Open the video at 58:30">&#9654; 58:30</a></header><div class="body">
+<pre class="code" data-lang="python"><code># in the training loop: only the training split
+ix = torch.randint(0, Xtr.shape[0], (32,))
+emb = C[Xtr[ix]]
+...
+loss = F.cross_entropy(logits, Ytr[ix])
+
+# afterwards: the dev loss, on the whole dev set
+emb = C[Xdev]
+h = torch.tanh(emb.view(-1, 6) @ W1 + b1)
+logits = h @ W2 + b2
+F.cross_entropy(logits, Ydev)             # about 2.33</code></pre>
+<ul>
+<li>The net never trained on those dev names, and still gets a decent loss: about <b>2.33</b>.</li>
+<li>Real training "can take multiple days". People launch jobs and wait, instead of running in a notebook.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Train only on Xtr, then measure on Xdev, which the net has never seen.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c38" data-title="Train ≈ dev means underfitting" data-num="38" data-track><header class="chead"><span class="num">38</span><h2>Train ≈ dev means underfitting</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3600s" target="_blank" rel="noopener" title="Open the video at 60:00">&#9654; 60:00</a></header><div class="body">
+<p>He also computes the loss on the whole training split. It is about the <b>same</b> as the dev loss.</p>
+<ul>
+<li>That means the net is <b>not</b> overfitting. It is not even powerful enough to memorise the data.</li>
+<li>This is called <b>underfitting</b>. "Our network is very tiny, very small."</li>
+<li>The fix he expects to help: <b>make the network bigger</b>.</li>
+</ul>
+<div class="callout remember"><b class="ctitle">Rule of thumb</b><div>Train loss ≈ dev loss: the model is too small. When the dev loss pulls <b>above</b> the train loss (you will see this near the end), it has started to overfit.</div></div>
+<div class="oneline"><small>In one line</small>When train and dev loss are about equal, the model is underfitting: it is too small.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c39" data-title="Make the hidden layer bigger" data-num="39" data-track><header class="chead"><span class="num">39</span><h2>Make the hidden layer bigger</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3640s" target="_blank" rel="noopener" title="Open the video at 60:40">&#9654; 60:40</a></header><div class="body">
+<pre class="code" data-lang="python"><code>W1 = torch.randn((6, 300), generator=g)     # 100 -&gt; 300 neurons
+b1 = torch.randn(300,      generator=g)
+W2 = torch.randn((300, 27), generator=g)
+# ... now 10,281 parameters instead of 3,481</code></pre>
+<ul>
+<li>He also records the step number, so the loss can be plotted against steps. The thick line is <b>mini-batch noise</b>.</li>
+<li>After 30,000 steps the dev loss is only about <b>2.5</b>: a bigger net "might take longer to converge".</li>
+<li>Lowering the learning rate helps a lot: the loss goes to about <b>2.3</b>, then <b>2.24</b> on train and <b>2.25</b> on dev.</li>
+<li>Still, that is less improvement than hoped.</li>
+</ul>
+<div class="oneline"><small>In one line</small>Tripling the hidden layer to 300 neurons (10,281 parameters) gives about 2.24 train and 2.25 dev.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c40" data-title="Maybe the embedding is the bottleneck" data-num="40" data-track><header class="chead"><span class="num">40</span><h2>Maybe the embedding is the bottleneck</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3860s" target="_blank" rel="noopener" title="Open the video at 64:20">&#9654; 64:20</a></header><div class="body">
+<p>A much bigger hidden layer did not help as much as expected. He lists some suspects:</p>
+<ul>
+<li><b>The embedding is too small.</b> We squeeze 27 characters into just 2 numbers each, and the net may not be able to use that space well. This is his main guess.</li>
+<li><b>The batch is too small.</b> Too much noise in the gradient, so the weights "thrash". A bigger batch gives a more accurate gradient.</li>
+<li><b>The learning rate.</b> Just lowering it already made "quite a bit of progress".</li>
+</ul>
+<p>Before changing the embedding size he wants to <b>look at it</b>, because with more than 2 numbers it can't be drawn.</p>
+<div class="oneline"><small>In one line</small>Hypothesis: a 2-number embedding is too cramped, so make the embedding bigger.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c41" data-title="Look at the learned embeddings" data-num="41" data-track><header class="chead"><span class="num">41</span><h2>Look at the learned embeddings</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=3900s" target="_blank" rel="noopener" title="Open the video at 65:00">&#9654; 65:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>plt.figure(figsize=(8, 8))
+plt.scatter(C[:, 0].data, C[:, 1].data, s=200)
+for i in range(C.shape[0]):
+    plt.text(C[i, 0].item(), C[i, 1].item(), itos[i], ha="center", va="center", color="white")
+plt.grid('minor')</code></pre>
+<figure class="fig"><svg class="d" viewBox="0 0 760 290" role="img" aria-label="Learned 2D embeddings of the 27 characters"><rect class="box" x="20" y="16" width="400" height="262" rx="14"/><circle class="pt" cx="220" cy="150" r="5" opacity=".55"/><circle class="pt" cx="250" cy="128" r="5" opacity=".55"/><circle class="pt" cx="270" cy="168" r="5" opacity=".55"/><circle class="pt" cx="232" cy="190" r="5" opacity=".55"/><circle class="pt" cx="290" cy="140" r="5" opacity=".55"/><circle class="pt" cx="206" cy="120" r="5" opacity=".55"/><circle class="pt" cx="256" cy="210" r="5" opacity=".55"/><circle class="pt" cx="310" cy="190" r="5" opacity=".55"/><circle class="pt" cx="200" cy="170" r="5" opacity=".55"/><circle class="pt" cx="330" cy="160" r="5" opacity=".55"/><circle class="pt" cx="280" cy="112" r="5" opacity=".55"/><circle class="pt" cx="240" cy="232" r="5" opacity=".55"/><circle class="pt acc" cx="96" cy="112" r="7"/><text class="t" x="96" y="100" text-anchor="middle">a</text><circle class="pt acc" cx="130" cy="98" r="7"/><text class="t" x="130" y="86" text-anchor="middle">e</text><circle class="pt acc" cx="120" cy="140" r="7"/><text class="t" x="120" y="128" text-anchor="middle">i</text><circle class="pt acc" cx="84" cy="146" r="7"/><text class="t" x="84" y="134" text-anchor="middle">o</text><circle class="pt acc" cx="150" cy="126" r="7"/><text class="t" x="150" y="114" text-anchor="middle">u</text><circle class="pt warn" cx="370" cy="48" r="7"/><text class="t" x="370" y="34" text-anchor="middle">q</text><circle class="pt warn" cx="52" cy="248" r="7"/><text class="t" x="70" y="266" text-anchor="start">.</text><text class="ts" x="220" y="270" text-anchor="middle">schematic, not the exact plot</text><text class="t" x="450" y="70" text-anchor="start">What the 2D plot showed:</text><text class="tm" x="450" y="100" text-anchor="start">• vowels  a e i o u  sit together</text><text class="tm" x="450" y="124" text-anchor="start">   → the net treats them as similar</text><text class="tm" x="450" y="154" text-anchor="start">• most other letters form a cloud</text><text class="tm" x="450" y="184" text-anchor="start">• q gets its own far-away spot</text><text class="tm" x="450" y="208" text-anchor="start">• the '.' token is far out too</text><text class="t" x="450" y="244" text-anchor="start">Not random: structure was learned.</text></svg><figcaption>A sketch of what he saw after training the two-dimensional embedding. Colours are mine.</figcaption></figure>
+<ul>
+<li>The <b>vowels a e i o u</b> sit together. The net treats them as very similar, almost interchangeable.</li>
+<li><b>q</b> is "treated as an exception" with a very special embedding. So is the <b>.</b> token, far away.</li>
+<li>The embeddings are "definitely not random": the net learned structure on its own.</li>
+</ul>
+<div class="oneline"><small>In one line</small>The 2D embeddings are not random: similar letters, like the vowels, end up close together.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c42" data-title="Bigger embeddings: 10 numbers each" data-num="42" data-track><header class="chead"><span class="num">42</span><h2>Bigger embeddings: 10 numbers each</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=4020s" target="_blank" rel="noopener" title="Open the video at 67:00">&#9654; 67:00</a></header><div class="body">
+<pre class="code" data-lang="python"><code>C  = torch.randn((27, 10),  generator=g)     # 10 numbers per character
+W1 = torch.randn((30, 200), generator=g)     # 3 letters x 10 = 30 inputs, 200 neurons
+b1 = torch.randn(200,       generator=g)
+W2 = torch.randn((200, 27), generator=g)
+b2 = torch.randn(27,        generator=g)
+
+h = torch.tanh(emb.view(-1, 30) @ W1 + b1)   # the 6 had to become 30
+lossi.append(loss.log10().item())            # plot the log of the loss</code></pre>
+<ul>
+<li>That is <b>11,897 parameters</b>. The hidden layer shrinks to 200 while the embedding grows.</li>
+<li>The old <code>6</code> was a hard-coded "magic number" and had to become <code>30</code>. In real code you would compute it.</li>
+<li>Plotting <b>log10 of the loss</b> squashes the "hockey stick" so the plot reads more easily.</li>
+<li>After 50,000 steps: about <b>2.36</b> on train and <b>2.38</b> on dev.</li>
+<li>Then 50,000 more at a lower rate: about <b>2.17</b> on train and <b>2.2</b> on dev. The embedding size was holding the net back.</li>
+</ul>
+<div class="oneline"><small>In one line</small>A 10-number embedding with 200 hidden neurons (11,897 parameters) improves things, once the 6 becomes 30.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c43" data-title="Tuning by hand is shaky" data-num="43" data-track><header class="chead"><span class="num">43</span><h2>Tuning by hand is shaky</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=4140s" target="_blank" rel="noopener" title="Open the video at 69:00">&#9654; 69:00</a></header><div class="body">
+<p>He admits that all this was done "haphazardly".</p>
+<ul>
+<li>He has no confidence that the learning rate, or the moment he lowers it, is set well: "we just do it at random". "The optimisation here is kind of suspect."</li>
+<li><b>In practice:</b> turn every setting into a hyperparameter, run lots of experiments, and keep whichever gives the <b>best dev loss</b>.</li>
+<li>Only then take that one model and evaluate on <b>test, a single time</b>. That is the number you report "in your paper or wherever".</li>
+<li>Train loss (2.17) and dev loss (2.2) are starting to <b>drift apart</b>, a first hint of overfitting.</li>
+</ul>
+<p>Ways forward he lists: tune the optimisation, change the sizes, or feed in <b>more than 3 characters</b> of context.</p>
+<div class="oneline"><small>In one line</small>Real practice: many experiments scored on dev, then one single look at test.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c44" data-title="The final run: dev loss 2.17" data-num="44" data-track><header class="chead"><span class="num">44</span><h2>The final run: dev loss 2.17</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=4290s" target="_blank" rel="noopener" title="Open the video at 71:30">&#9654; 71:30</a></header><div class="body">
+<p>Final version: <b>200,000 steps</b>. The first 100,000 use learning rate <b>0.1</b>, the next 100,000 use <b>0.01</b>.</p>
+<figure class="fig"><svg class="d" viewBox="0 0 760 290" role="img" aria-label="How the score improved"><text class="t" x="10" y="22" text-anchor="start">Loss, lower is better  (axis starts at 2.1)</text><line class="grid" x1="330.0" y1="40" x2="330.0" y2="224"/><text class="tmono" x="330.0" y="242" text-anchor="middle">2.1</text><line class="grid" x1="430.0000000000001" y1="40" x2="430.0000000000001" y2="224"/><text class="tmono" x="430.0000000000001" y="242" text-anchor="middle">2.2</text><line class="grid" x1="529.9999999999998" y1="40" x2="529.9999999999998" y2="224"/><text class="tmono" x="529.9999999999998" y="242" text-anchor="middle">2.3</text><line class="grid" x1="629.9999999999999" y1="40" x2="629.9999999999999" y2="224"/><text class="tmono" x="629.9999999999999" y="242" text-anchor="middle">2.4</text><line class="grid" x1="730.0" y1="40" x2="730.0" y2="224"/><text class="tmono" x="730.0" y="242" text-anchor="middle">2.5</text><text class="tm" x="10" y="64" text-anchor="start">bigram (last video)</text><line class="dash" x1="330" y1="60" x2="680.0000000000002" y2="60"/><circle class="pt warn" cx="680.0000000000002" cy="60" r="8"/><text class="t" x="666.0000000000002" y="64" text-anchor="end">2.45 on all data</text><text class="tm" x="10" y="110" text-anchor="start">MLP · 2-D embedding · 100 hidden</text><line class="dash" x1="330" y1="106" x2="560.0" y2="106"/><circle class="pt acc" cx="560.0" cy="106" r="8"/><text class="t" x="574.0" y="110" text-anchor="start">dev 2.33</text><text class="tm" x="10" y="156" text-anchor="start">MLP · 2-D embedding · 300 hidden</text><line class="dash" x1="330" y1="152" x2="479.99999999999994" y2="152"/><circle class="pt acc" cx="479.99999999999994" cy="152" r="8"/><text class="t" x="493.99999999999994" y="156" text-anchor="start">dev 2.25</text><text class="tm" x="10" y="202" text-anchor="start">MLP · 10-D embedding · 200 hidden</text><line class="dash" x1="330" y1="198" x2="399.9999999999999" y2="198"/><circle class="pt acc" cx="399.9999999999999" cy="198" r="8"/><text class="t" x="413.9999999999999" y="202" text-anchor="start">dev 2.17</text></svg><figcaption>Careful: the 2.45 for the bigram was measured on all the data last video, not on a held-out dev set.</figcaption></figure>
+<ul>
+<li>On screen: train loss <b>2.1260</b>, dev loss <b>2.1701</b>.</li>
+<li>He says 2.17 is the best dev loss he found "in the last 30 minutes or so".</li>
+<li>For comparison, last video's bigram reached 2.45, so the MLP is clearly better.</li>
+</ul>
+<div class="oneline"><small>In one line</small>The MLP reaches about 2.17 on dev, clearly better than the bigram's 2.45.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c45" data-title="Your turn: knobs to beat 2.17" data-num="45" data-track><header class="chead"><span class="num">45</span><h2>Your turn: knobs to beat 2.17</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=4345s" target="_blank" rel="noopener" title="Open the video at 72:25">&#9654; 72:25</a></header><div class="body">
+<p>He leaves it as an exercise: <b>beat 2.17</b>. The knobs:</p>
+<ul>
+<li>the <b>number of neurons</b> in the hidden layer</li>
+<li>the <b>size of the embedding</b> (how many numbers per character)</li>
+<li>the <b>number of context characters</b> (block size)</li>
+<li>the <b>optimisation</b>: how many steps, which learning rate, how it decays</li>
+<li>the <b>batch size</b>: it can change how many seconds the training takes to reach a good loss</li>
+</ul>
+<p>He also invites you to <b>read the paper</b>. By now you can follow a good chunk of it, and it contains more ideas for improvements.</p>
+<div class="oneline"><small>In one line</small>Hidden size, embedding size, context length, the learning-rate schedule and batch size are the knobs to try.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c46" data-title="Sample from the model" data-num="46" data-track><header class="chead"><span class="num">46</span><h2>Sample from the model</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=4400s" target="_blank" rel="noopener" title="Open the video at 73:20">&#9654; 73:20</a></header><div class="body">
+<pre class="code" data-lang="python"><code>g = torch.Generator().manual_seed(2147483647 + 10)
+
+for _ in range(20):
+    out = []
+    context = [0] * block_size                    # start with '...'
+    while True:
+        emb = C[torch.tensor([context])]          # (1, block_size, d)
+        h = torch.tanh(emb.view(1, -1) @ W1 + b1)
+        logits = h @ W2 + b2
+        probs = F.softmax(logits, dim=1)
+        ix = torch.multinomial(probs, num_samples=1, generator=g).item()
+        context = context[1:] + [ix]              # slide the window
+        out.append(ix)
+        if ix == 0:                               # drew '.', the name is over
+            break
+    print(''.join(itos[i] for i in out))</code></pre>
+<ul>
+<li>Start from all dots. Embed the context, run the net, softmax, draw one letter, slide the window. Stop when the drawn index is <b>0</b>.</li>
+<li><code>F.softmax</code> is careful about overflow, like cross_entropy.</li>
+</ul>
+<div class="chips "><span class="chip">carmahela.</span><span class="chip">jhovi.</span><span class="chip">kimrin.</span><span class="chip">kaleigh.</span><span class="chip">quinton.</span><span class="chip">lilea.</span><span class="chip">jamilio.</span><span class="chip">ham.</span><span class="chip">ameryncl.</span><span class="chip">chaiiv.</span></div>
+<p>These are from the screen. They are "much more word-like or name-like" than last video's. Some are still odd, like <b>ameryncl</b> and <b>chaiiv</b>. "We can still improve on this model quite a lot."</p>
+<div class="oneline"><small>In one line</small>Sampling: embed the last 3 letters, run the net, softmax, draw a letter, slide the window, stop at '.'.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="concept" id="c47" data-title="Bonus: run it in Google Colab" data-num="+"><header class="chead"><span class="num">+</span><h2>Bonus: run it in Google Colab</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=4501s" target="_blank" rel="noopener" title="Open the video at 75:01">&#9654; 75:01</a></header><div class="body">
+<p>So you don't have to install Jupyter and torch, he is sharing a <b>Google Colab</b> link, which appears in the video description.</p>
+<ul>
+<li>It looks like a notebook in your browser and runs the code of this lecture (a slightly shortened version).</li>
+<li>You can train the same network, plot it, sample from it, and change the numbers. <b>No installation.</b></li>
+</ul>
+<div class="oneline"><small>In one line</small>A Colab version of the notebook runs in your browser with no install; the link is in the video description.</div></div></section><section class="concept" id="t4" data-title="Test 4: honest scoring and results" data-num="T4" data-track><header class="chead"><span class="num">T4</span><h2>Test 4: honest scoring and results</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=4539s" target="_blank" rel="noopener" title="Open the video at 75:39">&#9654; 75:39</a></header><div class="body"><p class="hint">Try to answer out loud first, then open each one.</p><details class="q"><summary><span>Why can't training loss alone tell you whether a model is good?</span></summary><div class="ans">A big enough net can memorise the training set and drive the loss to almost zero. It then just reproduces training names and does badly on new ones.</div></details><details class="q"><summary><span>What are train, dev and test used for, and in what proportions?</span></summary><div class="ans">About 80% train (fit the parameters), 10% dev (choose hyperparameters such as hidden size), 10% test (final evaluation).</div></details><details class="q"><summary><span>Why should you evaluate on the test set only a few times?</span></summary><div class="ans">Every time you learn something from the test loss you are effectively training on it, and you risk overfitting to it.</div></details><details class="q"><summary><span>Train loss and dev loss are about equal. What does it mean and what do you do?</span></summary><div class="ans">The model is underfitting: it is too small. Make it bigger.</div></details><details class="q"><summary><span>What changed in the code when the embedding went from 2 to 10 numbers?</span></summary><div class="ans"><code>C</code> became (27, 10), <code>W1</code> became (30, 200), and the <code>6</code> in <code>view(-1, 6)</code> had to become <code>30</code>.</div></details><details class="q"><summary><span>How many parameters did the three networks have?</span></summary><div class="ans">3,481 (2-D embedding, 100 hidden), 10,281 (2-D, 300 hidden), and 11,897 (10-D, 200 hidden).</div></details><details class="q"><summary><span>How do you sample a name from the trained model?</span></summary><div class="ans">Start with an all-dots context; embed it, run hidden and output layers, softmax, draw a letter with multinomial, slide the window; stop when you draw index 0.</div></details><details class="q"><summary><span>What final dev loss did he reach, and what was the bigram's?</span></summary><div class="ans">About 2.17 for the MLP (train 2.13). The bigram scored about 2.45.</div></details><div class="oneline"><small>In one line</small>If you can answer these, the whole video is yours.</div></div><div class="cfoot"><button class="done-btn" type="button">Mark as got it</button></div></section><section class="part" id="p4" data-short="Cheat sheet"><div class="kicker">Cheat sheet</div><h2>Everything on one page</h2><p>Shapes, numbers, gotchas, the whole recipe in one block, and words to know.</p></section><section class="concept" id="s1" data-title="Shapes at a glance" data-num="★"><header class="chead"><span class="num">★</span><h2>Shapes at a glance</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=990s" target="_blank" rel="noopener" title="Open the video at 16:30">&#9654; 16:30</a></header><div class="body">
+<p>Using <b>N</b> examples, block size 3, embedding size <b>d</b> and hidden size <b>H</b>.</p>
+<table class="t"><tr><th>thing</th><th>shape</th><th>2-D, H=100</th><th>10-D, H=200</th></tr>
+<tr><td class="m">X</td><td><span class="shape">(N, 3)</span></td><td colspan="2">integers</td></tr>
+<tr><td class="m">Y</td><td><span class="shape">(N)</span></td><td colspan="2">integers</td></tr>
+<tr><td class="m">C</td><td><span class="shape">(27, d)</span></td><td><span class="shape">(27, 2)</span></td><td><span class="shape">(27, 10)</span></td></tr>
+<tr><td class="m">emb = C[X]</td><td><span class="shape">(N, 3, d)</span></td><td><span class="shape">(32, 3, 2)</span></td><td><span class="shape">(32, 3, 10)</span></td></tr>
+<tr><td class="m">emb.view(-1, 3*d)</td><td><span class="shape">(N, 3d)</span></td><td><span class="shape">(32, 6)</span></td><td><span class="shape">(32, 30)</span></td></tr>
+<tr><td class="m">W1, b1</td><td><span class="shape">(3d, H)</span> , <span class="shape">(H)</span></td><td><span class="shape">(6, 100)</span></td><td><span class="shape">(30, 200)</span></td></tr>
+<tr><td class="m">h = tanh(...)</td><td><span class="shape">(N, H)</span></td><td><span class="shape">(32, 100)</span></td><td><span class="shape">(32, 200)</span></td></tr>
+<tr><td class="m">W2, b2</td><td><span class="shape">(H, 27)</span> , <span class="shape">(27)</span></td><td><span class="shape">(100, 27)</span></td><td><span class="shape">(200, 27)</span></td></tr>
+<tr><td class="m">logits</td><td><span class="shape">(N, 27)</span></td><td colspan="2">one row per example</td></tr>
+<tr class="hl"><td class="m">parameters</td><td>27d + 3dH + H + 27H + 27</td><td>3,481</td><td>11,897</td></tr></table>
+<p class="hint">The 11,897 comes straight from the formula: 270 + 6,000 + 200 + 5,400 + 27.</p>
+<div class="oneline"><small>In one line</small>N is how many examples; 3 is the block size; 27 is the number of characters.</div></div></section><section class="concept" id="s2" data-title="Numbers worth remembering" data-num="★"><header class="chead"><span class="num">★</span><h2>Numbers worth remembering</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=4500s" target="_blank" rel="noopener" title="Open the video at 75:00">&#9654; 75:00</a></header><div class="body">
+<table class="t"><tr><th>what</th><th>value</th></tr>
+<tr><td>names in the dataset</td><td class="m">32,033</td></tr>
+<tr><td>tokens (26 letters + '.')</td><td class="m">27</td></tr>
+<tr><td>examples with block size 3</td><td class="m">228,146</td></tr>
+<tr><td>split (names)</td><td class="m">25,626 train · 3,203 dev · 3,204 test</td></tr>
+<tr><td>split (examples)</td><td class="m">182,625 · 22,655 · 22,866</td></tr>
+<tr><td>mini-batch size</td><td class="m">32</td></tr>
+<tr><td>seeds</td><td class="m">2147483647 (weights) · 42 (shuffle)</td></tr>
+<tr><td>the paper</td><td class="m">17,000 words · 30-D embeddings · 3 words of context · e.g. 100 hidden</td></tr>
+<tr><td>starting loss</td><td class="m">about 17</td></tr>
+<tr><td>one batch, memorised</td><td class="m">about 0.25</td></tr>
+<tr><td>learning-rate search</td><td class="m">0.001 to 1, best near 0.1</td></tr>
+<tr><td>bigram loss (last video)</td><td class="m">2.45</td></tr>
+<tr><td>first MLP, 3,481 params</td><td class="m">about 2.3 (dev 2.33)</td></tr>
+<tr><td>300 hidden, 10,281 params</td><td class="m">train 2.24 · dev 2.25</td></tr>
+<tr><td>10-D, 200 hidden, 11,897 params, 200,000 steps</td><td class="m">train 2.13 · dev 2.17</td></tr></table>
+<div class="oneline"><small>In one line</small>The story in numbers: 17 at the start, 2.45 for the bigram, 2.17 for the MLP.</div></div></section><section class="concept" id="s3" data-title="Gotchas he points out" data-num="★"><header class="chead"><span class="num">★</span><h2>Gotchas he points out</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=780s" target="_blank" rel="noopener" title="Open the video at 13:00">&#9654; 13:00</a></header><div class="body">
+<ol>
+<li><b>one_hot needs a tensor</b>, and returns integers: cast with <code>.float()</code> before multiplying.</li>
+<li><b>Don't hard-code the batch size.</b> Use <code>-1</code> or <code>emb.shape[0]</code> in <code>view</code>.</li>
+<li><b>Don't hard-code magic numbers.</b> The 6 in <code>view(-1, 6)</code> must become 30 when the embedding grows.</li>
+<li><b>Check broadcasting.</b> (32, 100) + (100) is fine, but always verify.</li>
+<li><b>view is free, cat is not.</b> cat creates new memory.</li>
+<li><b>requires_grad = True</b> on every parameter, and <b>p.grad = None</b> before each backward.</li>
+<li><b>Use the same ix</b> for X[ix] and Y[ix].</li>
+<li><b>Mini-batch loss is noisy.</b> Evaluate on the whole split to know where you are.</li>
+<li><b>Large positive logits overflow exp.</b> Use F.cross_entropy / F.softmax.</li>
+<li><b>Find the learning rate by sweeping</b> it, don't guess.</li>
+<li><b>Low training loss can be memorising.</b> Judge by the dev loss.</li>
+<li><b>Peek at the test set rarely.</b></li>
+</ol>
+<div class="oneline"><small>In one line</small>Most traps are about shapes, copies, and judging the model on the wrong data.</div></div></section><section class="concept" id="s4" data-title="The whole recipe in one block" data-num="★"><header class="chead"><span class="num">★</span><h2>The whole recipe in one block</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=2282s" target="_blank" rel="noopener" title="Open the video at 38:02">&#9654; 38:02</a></header><div class="body">
+<p>Everything from the video, in order, as it ended up (settings as he describes them).</p>
+<pre class="code" data-lang="python"><code># 1. data: 80 / 10 / 10 split of the shuffled names, block_size = 3
+Xtr, Ytr   = build_dataset(words[:n1])
+Xdev, Ydev = build_dataset(words[n1:n2])
+Xte, Yte   = build_dataset(words[n2:])
+
+# 2. parameters
+g  = torch.Generator().manual_seed(2147483647)
+C  = torch.randn((27, 10),  generator=g)
+W1 = torch.randn((30, 200), generator=g)
+b1 = torch.randn(200,       generator=g)
+W2 = torch.randn((200, 27), generator=g)
+b2 = torch.randn(27,        generator=g)
+parameters = [C, W1, b1, W2, b2]
+for p in parameters:
+    p.requires_grad = True
+
+# 3. train on random mini-batches of the train split
+for i in range(200000):
+    ix = torch.randint(0, Xtr.shape[0], (32,))
+    emb = C[Xtr[ix]]                                # (32, 3, 10)
+    h = torch.tanh(emb.view(-1, 30) @ W1 + b1)      # (32, 200)
+    logits = h @ W2 + b2                            # (32, 27)
+    loss = F.cross_entropy(logits, Ytr[ix])
+    for p in parameters:
+        p.grad = None
+    loss.backward()
+    lr = 0.1 if i &lt; 100000 else 0.01                # decay for the second half
+    for p in parameters:
+        p.data += -lr * p.grad
+
+# 4. score on dev (about 2.17), and only at the very end, on test
+emb = C[Xdev]
+h = torch.tanh(emb.view(-1, 30) @ W1 + b1)
+loss = F.cross_entropy(h @ W2 + b2, Ydev)</code></pre>
+<div class="oneline"><small>In one line</small>Split, build parameters, mini-batch loop, decay the rate, score on dev.</div></div></section><section class="concept" id="s5" data-title="Words to know" data-num="★"><header class="chead"><span class="num">★</span><h2>Words to know</h2><a class="time" href="https://www.youtube.com/watch?v=TCH_1BHY58I&amp;t=0s" target="_blank" rel="noopener" title="Open the video at 0:00">&#9654; 0:00</a></header><div class="body">
+<table class="t"><tr><th>word</th><th>meaning here</th></tr>
+<tr><td><b>MLP</b></td><td>multi-layer perceptron: a small network of fully connected layers</td></tr>
+<tr><td><b>embedding</b></td><td>a learnable list of numbers for each token</td></tr>
+<tr><td><b>block size</b></td><td>how many previous characters the net looks at</td></tr>
+<tr><td><b>hidden layer</b></td><td>the layer between the embeddings and the output (here with tanh)</td></tr>
+<tr><td><b>logits</b></td><td>raw scores of the output layer, before softmax</td></tr>
+<tr><td><b>cross-entropy</b></td><td>the loss: negative log of the probability given to the true answer</td></tr>
+<tr><td><b>mini-batch</b></td><td>a small random group of examples used for one step</td></tr>
+<tr><td><b>learning rate</b></td><td>how large a step we take against the gradient</td></tr>
+<tr><td><b>learning rate decay</b></td><td>lowering the rate late in training</td></tr>
+<tr><td><b>hyperparameter</b></td><td>a setting you choose (hidden size, embedding size, ...)</td></tr>
+<tr><td><b>overfitting</b></td><td>memorising the training data; training loss low, new-data loss high</td></tr>
+<tr><td><b>underfitting</b></td><td>model too small; train and dev loss both stay high and close together</td></tr>
+<tr><td><b>train / dev / test</b></td><td>fit weights / choose settings / final honest score</td></tr>
+<tr><td><b>out of distribution</b></td><td>a situation unlike anything seen in training</td></tr></table>
+<div class="oneline"><small>In one line</small>If a word here feels fuzzy, jump back to its card.</div></div></section>
+</main>
+</div>
+<div class="fnav" role="navigation" aria-label="Concept navigation"><div class="fbar"><i id="fbar"></i></div>
+<div class="frow"><button class="btn" id="fprev" type="button">← Back</button><span class="flab" id="flab"></span><button class="btn primary" id="fnext" type="button">Next →</button></div></div>
+<script>
+(function(){
+  var KEY='makemore-part2-notes-v1';
+  var st={bionic:true,focus:false,theme:null,done:{}};
+  try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);for(var k in o)st[k]=o[k];}}catch(e){}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
+  var root=document.documentElement;
+  var $=function(s,c){return (c||document).querySelector(s)};
+  var $$=function(s,c){return [].slice.call((c||document).querySelectorAll(s))};
+
+  /* ---------- code highlighting (tiny Python tokenizer) */
+  var RE=/(#[^\n]*)|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|\b(\d+(?:\.\d+)?)\b|\b(def|for|in|while|if|else|break|import|as|from|return|lambda|and|or|not|True|False|None)\b|\b(zip|print|range|sum|len|min|max|sorted|list|set|enumerate|open|float|int)\b/g;
+  function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  $$('pre.code code').forEach(function(c){
+    var t=c.textContent,out='',last=0,m;RE.lastIndex=0;
+    while((m=RE.exec(t))){
+      out+=esc(t.slice(last,m.index));
+      var cls=m[1]?'c':m[2]?'s':m[3]?'n':m[4]?'k':m[5]?'f':'f';
+      out+='<span class="tk-'+cls+'">'+esc(m[0])+'</span>';
+      last=m.index+m[0].length;
+    }
+    out+=esc(t.slice(last));c.innerHTML=out;
+  });
+
+  /* ---------- bionic reading: bold the start of each word (switch is CSS-only afterwards) */
+  var WORD=/[A-Za-zÀ-ɏ][A-Za-zÀ-ɏ'’]*/g;
+  function wrap(text){
+    var f=document.createDocumentFragment(),last=0;
+    text.replace(WORD,function(m,off){
+      if(off>last)f.appendChild(document.createTextNode(text.slice(last,off)));
+      var n=Math.max(1,Math.ceil(m.length*0.45)),b=document.createElement('b');
+      b.className='bn';b.textContent=m.slice(0,n);f.appendChild(b);
+      if(m.length>n)f.appendChild(document.createTextNode(m.slice(n)));
+      last=off+m.length;return m;
+    });
+    if(last<text.length)f.appendChild(document.createTextNode(text.slice(last)));
+    return f;
+  }
+  var SKIP='code,pre,svg,button,h1,h2,h3,h4,.shape,.chip,.time,.num,.kicker,.ctitle,b,strong,script,style,.formula,.nobn,th';
+  var walker=document.createTreeWalker($('main'),NodeFilter.SHOW_TEXT,{acceptNode:function(n){
+    if(!n.nodeValue.trim())return NodeFilter.FILTER_REJECT;
+    var p=n.parentElement;if(!p||p.closest(SKIP))return NodeFilter.FILTER_REJECT;
+    return NodeFilter.FILTER_ACCEPT;}});
+  var nodes=[];while(walker.nextNode())nodes.push(walker.currentNode);
+  nodes.forEach(function(n){n.parentNode.replaceChild(wrap(n.nodeValue),n);});
+
+  /* ---------- table of contents */
+  var concepts=$$('.concept'),toc=$('#toc'),tocLinks=[];
+  var partOf={};
+  var cur=-1,part=null,idx=0;
+  $$('main > .part, main > .concept').forEach(function(el){
+    if(el.classList.contains('part')){
+      var h=document.createElement('h3');h.textContent=el.getAttribute('data-short');toc.appendChild(h);
+    }else{
+      var a=document.createElement('a');a.href='#'+el.id;
+      var num=el.getAttribute('data-num');
+      a.innerHTML='<span class="n">'+(num||'')+'</span><span>'+esc(el.getAttribute('data-title'))+'</span>';
+      a.addEventListener('click',function(e){
+        var i=concepts.indexOf(el);
+        if(root.getAttribute('data-focus')==='on'){e.preventDefault();setCurrent(i,true);}
+        toc.classList.remove('open');
+      });
+      toc.appendChild(a);tocLinks.push(a);
+    }
+  });
+
+  /* ---------- done tracking */
+  var trackable=concepts.filter(function(c){return c.hasAttribute('data-track');});
+  function refreshDone(){
+    var n=0;
+    concepts.forEach(function(c,i){
+      var d=!!st.done[c.id];
+      c.classList.toggle('done',d);
+      tocLinks[i].classList.toggle('done',d);
+      var b=$('.done-btn',c);if(b){b.textContent=d?'✓ Got it':'Mark as got it';}
+      if(d&&c.hasAttribute('data-track'))n++;
+    });
+    $('#progText').textContent=n+' / '+trackable.length+' got it';
+    $('#progBar').style.width=(trackable.length?n/trackable.length*100:0)+'%';
+  }
+  $$('.done-btn').forEach(function(b){
+    b.addEventListener('click',function(){
+      var c=b.closest('.concept');st.done[c.id]=!st.done[c.id];save();refreshDone();
+    });
+  });
+  var rs=$('#resetBtn');if(rs)rs.addEventListener('click',function(){
+    if(confirm('Clear all your "got it" ticks?')){st.done={};save();refreshDone();}
+  });
+
+  /* ---------- current concept + focus mode */
+  var fnav=$('.fnav'),fprev=$('#fprev'),fnext=$('#fnext'),flab=$('#flab'),fbar=$('#fbar');
+  function updateNav(){
+    tocLinks.forEach(function(a,i){a.classList.toggle('active',i===cur);});
+    if(cur<0)return;
+    flab.textContent=(cur+1)+' / '+concepts.length+' · '+concepts[cur].getAttribute('data-title');
+    fbar.style.width=((cur+1)/concepts.length*100)+'%';
+    fprev.disabled=cur===0;
+    fnext.textContent=cur===concepts.length-1?'Back to top ↑':'Next →';
+  }
+  function setCurrent(i,scroll){
+    cur=Math.max(0,Math.min(i,concepts.length-1));
+    concepts.forEach(function(c,k){c.classList.toggle('current',k===cur);});
+    updateNav();
+    if(scroll){var y=concepts[cur].getBoundingClientRect().top+window.scrollY-84;window.scrollTo({top:Math.max(0,y)});}
+  }
+  function visibleIndex(){
+    var f=0;concepts.forEach(function(c,i){if(c.getBoundingClientRect().top<=window.innerHeight*0.35)f=i;});return f;
+  }
+  var ticking=false;
+  window.addEventListener('scroll',function(){
+    if(root.getAttribute('data-focus')==='on'||ticking)return;ticking=true;
+    requestAnimationFrame(function(){ticking=false;var v=visibleIndex();if(v!==cur){cur=v;concepts.forEach(function(c,k){c.classList.toggle('current',k===cur);});updateNav();}});
+  },{passive:true});
+  fprev.addEventListener('click',function(){setCurrent(cur-1,true);});
+  fnext.addEventListener('click',function(){
+    if(cur>=concepts.length-1){window.scrollTo({top:0});setCurrent(0,false);}else setCurrent(cur+1,true);
+  });
+  document.addEventListener('keydown',function(e){
+    if(root.getAttribute('data-focus')!=='on'||e.metaKey||e.ctrlKey||e.altKey)return;
+    if(e.key==='ArrowRight'){setCurrent(cur+1,true);}
+    if(e.key==='ArrowLeft'){setCurrent(cur-1,true);}
+  });
+
+  /* ---------- toolbar */
+  function sync(){
+    root.setAttribute('data-bionic',st.bionic?'on':'off');
+    root.setAttribute('data-focus',st.focus?'on':'off');
+    var th=st.theme||(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    root.setAttribute('data-theme',th);
+    [['#bionicBtn',st.bionic],['#focusBtn',st.focus]].forEach(function(p){
+      var b=$(p[0]);b.setAttribute('aria-pressed',String(p[1]));$('.st',b).textContent=p[1]?'On':'Off';
+    });
+  }
+  $('#bionicBtn').addEventListener('click',function(){st.bionic=!st.bionic;save();sync();});
+  $('#focusBtn').addEventListener('click',function(){
+    st.focus=!st.focus;save();
+    var i=st.focus?visibleIndex():cur;sync();
+    if(st.focus)setCurrent(i,true);else if(cur>=0)setTimeout(function(){setCurrent(cur,true);},30);
+  });
+  $('#themeBtn').addEventListener('click',function(){
+    var now=root.getAttribute('data-theme');st.theme=now==='dark'?'light':'dark';save();sync();
+  });
+  $('#tocBtn').addEventListener('click',function(){toc.classList.toggle('open');});
+
+  sync();refreshDone();
+  setCurrent(0,false);
+  if(st.focus)setCurrent(visibleIndex(),false);
+})();
+</script>
+</body>
+</html>
