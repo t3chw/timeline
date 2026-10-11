@@ -81,6 +81,20 @@ $P(A\cap B)=0$, but independence would need $P(A)P(B)>0$. Contradiction.
 </details>
 ```
 
+### Plots and diagrams
+
+Add a plot when it makes a concept clearer (loss curves, distributions, comparisons). There is no
+matplotlib here, so write **inline SVG** (generate the coordinates with plain Python). Put it in a
+`<figure class="plot">` as one HTML block: **no blank lines and no indentation inside it**. Colours come
+from classes in `src/styles/prose.css`, so charts follow the light/dark theme; do not hard-code colours:
+
+- `.ax` axes, `.gd` gridlines, `.mark` dashed guide lines, `.ttl` panel title, `.val` value labels
+- `.tr` / `.vl` training / validation lines, `.fill-tr` / `.fill-vl` bars, `.tx-tr` / `.tx-vl` matching text
+- Side-by-side panels go in `<div class="plots">` (three fit in a row on desktop, stack on a phone; design each
+  panel at about 230 wide). A single chart uses `<figure class="plot wide">`.
+- Give the `<svg>` a `viewBox`, `role="img"` and an `aria-label`. Label schematic curves "Illustrative
+  curves, not real data." See `2026-10-11-training-validation-loss-and-baselines.md` for a working example.
+
 ## Reading aids and revision (already built, do not break)
 
 - **Bionic reading** is on by default with a toggle on every note. At build time

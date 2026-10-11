@@ -361,3 +361,116 @@ html[data-focus='on'] .prose .chunk.is-current {
 .prose details > * + * {
   margin-top: 0.8em;
 }
+
+/* ------------------------------------------------------------------ plots (inline SVG in notes)
+   Notes embed <figure class="plot"><svg>...</svg></figure>. The SVG uses these classes instead of
+   fixed colours, so charts follow the light/dark theme. */
+.prose .plots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr));
+  gap: 0.8rem;
+}
+
+.prose .plots > figure.plot {
+  max-width: 22rem;
+  margin: 0;
+}
+
+.prose figure.plot {
+  margin-inline: 0;
+  margin-bottom: 0;
+  padding: 0.7rem 0.7rem 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.prose figure.plot.wide {
+  max-width: 26rem;
+}
+
+.prose figure.plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.prose figure.plot figcaption {
+  margin: 0.4rem 0.2rem 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+.prose .plot-note {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+}
+
+.plot text {
+  font: 500 10.5px var(--font-sans);
+  fill: var(--ink-2);
+}
+
+.plot .ttl {
+  font-size: 12.5px;
+  font-weight: 650;
+  fill: var(--ink);
+}
+
+.plot .val {
+  font-weight: 650;
+  fill: var(--ink);
+}
+
+.plot .ax {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1.4;
+}
+
+.plot .gd {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.plot .mark {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+}
+
+.plot .tr,
+.plot .vl {
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.plot .tr {
+  stroke: var(--accent);
+}
+
+.plot .vl {
+  stroke: var(--warn);
+}
+
+.plot .fill-tr {
+  fill: var(--accent);
+}
+
+.plot .fill-vl {
+  fill: var(--warn);
+}
+
+.plot text.tx-tr {
+  font-weight: 650;
+  fill: var(--accent-ink);
+}
+
+.plot text.tx-vl {
+  font-weight: 650;
+  fill: var(--warn);
+}
